@@ -6,22 +6,29 @@ on:
       - "*"
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install SDL2
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
 
-      - name: Install Rust
+      - name: Install Rust (stable + Clippy + Rustfmt)
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
+          components: clippy, rustfmt
 
       - name: Run tests
         run: cargo test
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Check formatting
+        run: cargo fmt --check
