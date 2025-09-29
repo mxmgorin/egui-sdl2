@@ -80,20 +80,19 @@ impl App {
         self.repaint_pending = resp.repaint;
 
         if !resp.consumed {
-            match event {
-                Event::Window { win_event, .. } => {
-                    if let WindowEvent::Close = win_event {
-                        self.quit = true;
-                    }
-                }
-                _ => {}
+            if let Event::Window {
+                win_event: WindowEvent::Close,
+                ..
+            } = event
+            {
+                self.quit = true;
             }
         }
     }
 
     pub fn update(&mut self) {
         let repaint_delay = self.egui.run(|ctx| {
-            egui::Window::new("Hello, world!").show(&ctx, |ui| {
+            egui::Window::new("Hello, world!").show(ctx, |ui| {
                 ui.label("Hello, world!");
 
                 if ui.button("Greet").clicked() {
