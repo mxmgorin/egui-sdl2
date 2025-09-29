@@ -15,7 +15,11 @@ Features include:
 
 Both `egui` and `sdl2` are re-exported for convenience. The `sdl2` re-export includes all feature flags available to use.
 
-Examples can be found [here](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/). Run the example with:
+## Usage
+
+To get started, create a `State` instance to handle events and an `EguiGlow` instance for rendering with `glow`.
+Examples are available in the [examples/](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/) directory. You can run the “hello world” example with:
+
 ``` sh
 cargo run --example hello_world
 ```

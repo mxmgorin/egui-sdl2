@@ -7,8 +7,9 @@ description = "Bindings for using egui with sdl2"
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/mxmgorin/egui-sdl2"
-keywords = ["sdl2", "egui", "gui"]
-categories = ["gui"]
+homepage = "https://github.com/mxmgorin/egui-sdl2"
+keywords = ["sdl2", "egui", "gui", "gamedev"]
+categories = ["gui", "gamedev"]
 
 [features]
 default = ["links", "glow-backend"]
