@@ -2,7 +2,6 @@ use glow::HasContext;
 use sdl2::{
     event::{Event, WindowEvent},
     video::GLContext,
-    VideoSubsystem,
 };
 use std::{sync::Arc, time::Duration};
 
@@ -32,7 +31,6 @@ fn main() {
 }
 
 struct App {
-    _video: VideoSubsystem,
     _gl_ctx: GLContext,
     glow_ctx: Arc<glow::Context>,
     window: sdl2::video::Window,
@@ -66,7 +64,6 @@ impl App {
         let egui = egui_sdl2::EguiGlow::new(&window, glow_ctx.clone(), None, false);
 
         Self {
-            _video: video,
             _gl_ctx: gl_ctx,
             glow_ctx,
             window,
