@@ -349,12 +349,13 @@ impl State {
             return EventResponse::default();
         };
 
+        self.egui_input.modifiers = into_egui_modifiers(keymod);
         self.egui_input.events.push(egui::Event::Key {
             key,
             physical_key: into_egui_physical_key(scancode),
             pressed,
             repeat,
-            modifiers: into_egui_modifiers(keymod),
+            modifiers: self.egui_input.modifiers,
         });
 
         // When pressing the Tab key, egui focuses the first focusable element, hence Tab always consumes.
