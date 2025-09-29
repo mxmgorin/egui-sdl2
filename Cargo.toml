@@ -1,0 +1,39 @@
+[package]
+name = "egui-sdl2"
+version = "0.1.0"
+edition = "2021"
+authors = ["troidem <mxmgorin@gmail.com>"]
+description = "Bindings for using egui with sdl2"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/mxmgorin/egui-sdl2"
+keywords = ["sdl2", "egui"]
+
+[features]
+default = ["links"]
+# Enable rendering via glow
+glow-backend = ["glow", "egui_glow"]
+# Enable opening links in a browser when an egui hyperlink is clicked.
+links = ["webbrowser"]
+# Forward sdl2 features
+sdl2-gfx = ["sdl2/gfx"]
+sdl2-image = ["sdl2/image"]
+sdl2-mixer = ["sdl2/mixer"]
+sdl2-ttf = ["sdl2/ttf"]
+sdl2-raw-window-handle = ["sdl2/raw-window-handle"]
+sdl2-unsafe_textures = ["sdl2/unsafe_textures"]
+sdl2-use-bindgen = ["sdl2/use-bindgen"]
+sdl2-use-vcpkg = ["sdl2/use-vcpkg"]
+sdl2-use-pkgconfig = ["sdl2/use-pkgconfig"]
+sdl2-static-link = ["sdl2/static-link"]
+sdl2-use_mac_framework = ["sdl2/use_mac_framework"]
+sdl2-use_ios_framework = ["sdl2/use_ios_framework"]
+sdl2-bundled = ["sdl2/bundled"]
+
+[dependencies]
+log = "0.4.28"
+sdl2 = { version = "0.38.0", default-features = false }
+egui = "0.32.3"
+glow = { version = "0.16.0", optional = true }
+egui_glow = { version = "0.32.3", optional = true }
+webbrowser = { version = "1.0.5", optional = true }
