@@ -10,7 +10,7 @@ repository = "https://github.com/mxmgorin/egui-sdl2"
 keywords = ["sdl2", "egui"]
 
 [features]
-default = ["links"]
+default = ["links", "glow-backend"]
 # Enable rendering via glow
 glow-backend = ["glow", "egui_glow"]
 # Enable opening links in a browser when an egui hyperlink is clicked.
