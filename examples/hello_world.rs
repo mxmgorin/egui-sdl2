@@ -51,7 +51,6 @@ impl App {
         let window = video
             .window("Egui-sdl2", 800, 600)
             .opengl()
-            .position_centered()
             .build()
             .unwrap();
         let gl_ctx = window
@@ -98,11 +97,11 @@ impl App {
                 ui.label("Hello, world!");
 
                 if ui.button("Greet").clicked() {
-                    self.multiline_text = "Hello, world".to_string();
+                    self.multiline_text = "Hello, world!".to_string();
                     println!("{}", &self.multiline_text);
                 }
                 ui.text_edit_multiline(&mut self.multiline_text);
-                ui.add(egui::Slider::new(&mut self.slider_value.into(), 0.0..=50.0).text("Slider"));
+                ui.add(egui::Slider::new(&mut self.slider_value, 0.0..=50.0).text("Slider"));
                 ui.separator();
 
                 if ui.button("Quit?").clicked() {

@@ -32,9 +32,17 @@ pub struct State {
     start_time: std::time::Instant,
     viewport_id: egui::ViewportId,
     pointer_pos_in_points: Option<egui::Pos2>,
-    current_cursor_icon: Option<egui::CursorIcon>,
+    current_cursor: Option<CurrentCursor>,
     clipboard: sdl2::clipboard::ClipboardUtil,
     window_size: (u32, u32), // cache value and update on events
+}
+
+/// Represents currently active cursor.
+///
+/// Contains egui icon and allocation of sdl2 cursor.
+struct CurrentCursor {
+    icon: egui::CursorIcon,
+    _cursor: sdl2::mouse::Cursor,
 }
 
 impl State {
@@ -60,7 +68,7 @@ impl State {
             start_time: std::time::Instant::now(),
             egui_input,
             pointer_pos_in_points: None,
-            current_cursor_icon: None,
+            current_cursor: None,
             window_size,
         }
     }
@@ -382,17 +390,29 @@ impl State {
     }
 
     fn set_cursor_icon(&mut self, cursor_icon: egui::CursorIcon) {
-        if self.current_cursor_icon == Some(cursor_icon) {
-            return;
+        if let Some(cursor) = &self.current_cursor {
+            if cursor.icon == cursor_icon {
+                return;
+            }
         }
 
         if self.pointer_pos_in_points.is_some() {
-            self.current_cursor_icon = Some(cursor_icon);
             let system_cursor = into_sdl2_cursor(cursor_icon);
-            let cursor = Cursor::from_system(system_cursor).unwrap();
-            cursor.set();
+
+            match Cursor::from_system(system_cursor) {
+                Ok(cursor) => {
+                    cursor.set();
+                    self.current_cursor = Some(CurrentCursor {
+                        icon: cursor_icon,
+                        _cursor: cursor,
+                    });
+                }
+                Err(e) => {
+                    log::warn!("Failed to set cursor: {e}")
+                }
+            }
         } else {
-            self.current_cursor_icon = None;
+            self.current_cursor = None;
         }
     }
 }
