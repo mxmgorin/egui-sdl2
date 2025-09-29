@@ -10,7 +10,7 @@ fn main() {
     let mut event_pump = sdl.event_pump().unwrap();
     let mut app = App::new(&sdl);
 
-    loop {
+    while !app.quit {
         app.update();
         app.draw();
 
@@ -21,11 +21,7 @@ fn main() {
         };
 
         if let Some(event) = event {
-            let quit = app.handle_event(&event);
-
-            if quit {
-                break;
-            }
+            app.handle_event(&event);
         }
     }
 }
@@ -37,6 +33,10 @@ struct App {
     egui: egui_sdl2::EguiGlow,
     repaint_delay: Option<Duration>,
     repaint_pending: bool,
+
+    multiline_text: String,
+    slider_value: f32,
+    pub quit: bool,
 }
 
 impl Drop for App {
@@ -70,11 +70,13 @@ impl App {
             egui,
             repaint_delay: None,
             repaint_pending: false,
+            quit: false,
+            multiline_text: "Cut, copy, paste".to_string(),
+            slider_value: 0.0,
         }
     }
 
-    /// Return whether should quit
-    pub fn handle_event(&mut self, event: &Event) -> bool {
+    pub fn handle_event(&mut self, event: &Event) {
         let resp = self.egui.state.on_event(&self.window, event);
         self.repaint_pending = resp.repaint;
 
@@ -82,22 +84,29 @@ impl App {
             match event {
                 Event::Window { win_event, .. } => {
                     if let WindowEvent::Close = win_event {
-                        return true;
+                        self.quit = true;
                     }
                 }
                 _ => {}
             }
         }
-
-        false
     }
 
     pub fn update(&mut self) {
         let repaint_delay = self.egui.run(|ctx| {
             egui::Window::new("Hello, world!").show(&ctx, |ui| {
                 ui.label("Hello, world!");
+
                 if ui.button("Greet").clicked() {
-                    println!("Hello, world!");
+                    self.multiline_text = "Hello, world".to_string();
+                    println!("{}", &self.multiline_text);
+                }
+                ui.text_edit_multiline(&mut self.multiline_text);
+                ui.add(egui::Slider::new(&mut self.slider_value.into(), 0.0..=50.0).text("Slider"));
+                ui.separator();
+
+                if ui.button("Quit?").clicked() {
+                    self.quit = true;
                 }
             });
         });
