@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/mxmgorin/egui-sdl2"
 homepage = "https://github.com/mxmgorin/egui-sdl2"
 keywords = ["sdl2", "egui", "gui", "gamedev"]
-categories = ["gui", "gamedev"]
+categories = ["gui"]
 include = ["../LICENSE-APACHE", "../LICENSE-MIT", "**/*.rs", "Cargo.toml"]
 
 [features]
