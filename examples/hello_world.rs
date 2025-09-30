@@ -46,6 +46,7 @@ impl App {
         let window = video
             .window("Egui-sdl2", 800, 600)
             .opengl()
+            .resizable()
             .build()
             .unwrap();
         let gl_ctx = window
