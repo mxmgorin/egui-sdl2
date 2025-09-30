@@ -25,7 +25,6 @@ fn main() {
 
 struct App {
     _gl_ctx: GLContext,
-    glow_ctx: Arc<glow::Context>,
     window: sdl2::video::Window,
     egui: egui_sdl2::EguiGlow,
     // state
@@ -56,11 +55,10 @@ impl App {
         let glow_ctx = Arc::new(unsafe {
             glow::Context::from_loader_function(|name| video.gl_get_proc_address(name) as *const _)
         });
-        let egui = egui_sdl2::EguiGlow::new(&window, glow_ctx.clone(), None, false);
+        let egui = egui_sdl2::EguiGlow::new(&window, glow_ctx, None, false);
 
         Self {
             _gl_ctx: gl_ctx,
-            glow_ctx,
             window,
             egui,
             running: true,
@@ -84,7 +82,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let _repaint_delay = self.egui.run(|ctx| {
+        self.egui.run(|ctx| {
             egui::Window::new("Hello, world!").show(ctx, |ui| {
                 ui.label("Hello, world!");
 
@@ -105,8 +103,8 @@ impl App {
 
     pub fn draw(&mut self) {
         unsafe {
-            self.glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
-            self.glow_ctx.clear(glow::COLOR_BUFFER_BIT);
+            self.egui.painter.gl().clear_color(0.0, 0.0, 0.0, 1.0);
+            self.egui.painter.gl().clear(glow::COLOR_BUFFER_BIT);
         }
         self.egui.paint();
         self.window.gl_swap_window();

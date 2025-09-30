@@ -1,6 +1,6 @@
 use egui::ViewportId;
 use egui_glow::ShaderVersion;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 /// Integration between [`egui`] and [`glow`] for app based on [`sdl2`].
 pub struct EguiGlow {
@@ -29,7 +29,6 @@ impl EguiGlow {
             .unwrap();
         let ctx = egui::Context::default();
         let state = crate::State::new(window, ctx.clone(), ViewportId::ROOT);
-
         Self {
             ctx,
             painter,
@@ -40,14 +39,12 @@ impl EguiGlow {
         }
     }
 
-    /// Returns the `Duration` of the timeout after which egui should be repainted even if there's no new events.
-    ///
     /// Call [`Self::paint`] later to paint.
-    pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) -> Duration {
+    pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) {
         let raw_input = self.state.take_egui_input();
         let egui::FullOutput {
             platform_output,
-            viewport_output,
+            viewport_output: _,
             textures_delta,
             shapes,
             pixels_per_point,
@@ -57,11 +54,6 @@ impl EguiGlow {
         self.shapes = shapes;
         self.textures_delta.append(textures_delta);
         self.pixels_per_point = pixels_per_point;
-
-        viewport_output
-            .get(&ViewportId::ROOT)
-            .map(|x| x.repaint_delay)
-            .unwrap_or_else(|| Duration::ZERO)
     }
 
     /// Paint the results of the last call to [`Self::run`].
