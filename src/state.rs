@@ -41,7 +41,7 @@ pub struct State {
 /// Contains egui icon and allocation of sdl2 cursor.
 struct CurrentCursor {
     icon: egui::CursorIcon,
-    _cursor: sdl2::mouse::Cursor, // keep reference
+    cursor: Option<sdl2::mouse::Cursor>, // keep reference
 }
 
 impl State {
@@ -471,19 +471,21 @@ impl State {
 
         if self.pointer_pos_in_points.is_some() {
             let system_cursor = into_sdl2_cursor(cursor_icon);
+            let mut current_cursor = CurrentCursor {
+                icon: cursor_icon,
+                cursor: None,
+            };
 
             match Cursor::from_system(system_cursor) {
                 Ok(cursor) => {
                     cursor.set();
-                    self.current_cursor = Some(CurrentCursor {
-                        icon: cursor_icon,
-                        _cursor: cursor,
-                    });
+                    current_cursor.cursor = Some(cursor);
                 }
                 Err(e) => {
                     log::warn!("Failed to set cursor: {e}")
                 }
             }
+            self.current_cursor.replace(current_cursor);
         } else {
             self.current_cursor = None;
         }
