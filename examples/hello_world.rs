@@ -9,20 +9,17 @@ fn main() {
     let sdl = sdl2::init().unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
     let mut app = App::new(&sdl);
+    const TARGET_FPS: f64 = 60.0;
+    let sleep_dur = Duration::from_secs_f64(1.0 / TARGET_FPS);
 
-    while !app.quit {
-        app.update();
-        app.draw();
-
-        let event = if let Some(repaint_delay) = app.repaint_delay.take() {
-            event_pump.wait_event_timeout(repaint_delay.as_millis() as u32)
-        } else {
-            Some(event_pump.wait_event())
-        };
-
-        if let Some(event) = event {
+    while app.running {
+        for event in event_pump.poll_iter() {
             app.handle_event(&event);
         }
+
+        app.update();
+        app.draw();
+        std::thread::sleep(sleep_dur);
     }
 }
 
@@ -31,12 +28,10 @@ struct App {
     glow_ctx: Arc<glow::Context>,
     window: sdl2::video::Window,
     egui: egui_sdl2::EguiGlow,
-    repaint_delay: Option<Duration>,
-    repaint_pending: bool,
-
+    // state
     multiline_text: String,
     slider_value: f32,
-    pub quit: bool,
+    pub running: bool,
 }
 
 impl Drop for App {
@@ -67,17 +62,14 @@ impl App {
             glow_ctx,
             window,
             egui,
-            repaint_delay: None,
-            repaint_pending: false,
-            quit: false,
-            multiline_text: "Cut, copy, paste".to_string(),
+            running: true,
+            multiline_text: "Cut, copy, paste here".to_string(),
             slider_value: 0.0,
         }
     }
 
     pub fn handle_event(&mut self, event: &Event) {
         let resp = self.egui.state.on_event(&self.window, event);
-        self.repaint_pending = resp.repaint;
 
         if !resp.consumed {
             if let Event::Window {
@@ -85,13 +77,13 @@ impl App {
                 ..
             } = event
             {
-                self.quit = true;
+                self.running = false;
             }
         }
     }
 
     pub fn update(&mut self) {
-        let repaint_delay = self.egui.run(|ctx| {
+        let _repaint_delay = self.egui.run(|ctx| {
             egui::Window::new("Hello, world!").show(ctx, |ui| {
                 ui.label("Hello, world!");
 
@@ -104,22 +96,18 @@ impl App {
                 ui.separator();
 
                 if ui.button("Quit?").clicked() {
-                    self.quit = true;
+                    self.running = false;
                 }
             });
         });
-        self.repaint_delay.replace(repaint_delay);
     }
 
     pub fn draw(&mut self) {
-        if self.repaint_pending || self.repaint_delay.is_some() {
-            self.repaint_pending = false;
-            unsafe {
-                self.glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
-                self.glow_ctx.clear(glow::COLOR_BUFFER_BIT);
-            }
-            self.egui.paint();
-            self.window.gl_swap_window();
+        unsafe {
+            self.glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
+            self.glow_ctx.clear(glow::COLOR_BUFFER_BIT);
         }
+        self.egui.paint();
+        self.window.gl_swap_window();
     }
 }

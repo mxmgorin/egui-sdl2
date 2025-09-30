@@ -13,4 +13,4 @@ target
 # Contains mutation testing data
 **/mutants.out*/
 .idea/
-.Cargo.lock
+Cargo.lock

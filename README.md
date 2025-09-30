@@ -17,9 +17,8 @@ Both `egui` and `sdl2` are re-exported for convenience. The `sdl2` re-export inc
 
 ## Usage
 
-To get started, create a `State` instance to handle events and an `EguiGlow` instance for rendering with `glow`.
-Examples are available in the [examples/](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/) directory. You can run the “hello world” example with:
+To get started, create an `EguiGlow` instance to handle rendering with `glow`, provide it with events, and then call `run` and `paint`. Alternatively, create a `State` instance if you only need event handling. Examples are available in the [examples/](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/) directory. You can run the “hello world” example with:
 
-``` sh
+```sh
 cargo run --example hello_world
 ```
