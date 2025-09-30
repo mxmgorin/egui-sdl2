@@ -257,84 +257,58 @@ impl State {
                     consumed: false,
                 }
             }
-            FingerDown {
-                touch_id,
-                finger_id,
-                x,
-                y,
-                pressure,
-                ..
-            } => self.on_touch(
-                window,
-                egui::TouchPhase::Start,
-                *touch_id,
-                *finger_id,
-                *x,
-                *y,
-                *pressure,
-            ),
-            FingerUp {
-                touch_id,
-                finger_id,
-                x,
-                y,
-                pressure,
-                ..
-            } => self.on_touch(
-                window,
-                egui::TouchPhase::End,
-                *touch_id,
-                *finger_id,
-                *x,
-                *y,
-                *pressure,
-            ),
-            FingerMotion {
-                touch_id,
-                finger_id,
-                x,
-                y,
-                pressure,
-                ..
-            } => self.on_touch(
-                window,
-                egui::TouchPhase::Move,
-                *touch_id,
-                *finger_id,
-                *x,
-                *y,
-                *pressure,
-            ),
+            FingerDown { touch_id, finger_id, x, y, pressure, .. } => {
+                self.on_touch(window, TouchInfo {
+                    phase: egui::TouchPhase::Start,
+                    touch_id: *touch_id,
+                    finger_id: *finger_id,
+                    x: *x,
+                    y: *y,
+                    pressure: *pressure,
+                })
+            }
+            FingerUp { touch_id, finger_id, x, y, pressure, .. } => {
+                self.on_touch(window, TouchInfo {
+                    phase: egui::TouchPhase::End,
+                    touch_id: *touch_id,
+                    finger_id: *finger_id,
+                    x: *x,
+                    y: *y,
+                    pressure: *pressure,
+                })
+            }
+            FingerMotion { touch_id, finger_id, x, y, pressure, .. } => {
+                self.on_touch(window, TouchInfo {
+                    phase: egui::TouchPhase::Move,
+                    touch_id: *touch_id,
+                    finger_id: *finger_id,
+                    x: *x,
+                    y: *y,
+                    pressure: *pressure,
+                })
+            }
             _ => EventResponse::default(),
         }
     }
 
-    fn on_touch(
-        &mut self,
-        window: &Window,
-        phase: egui::TouchPhase,
-        touch_id: i64,
-        finger_id: i64,
-        x: f32,
-        y: f32,
-        pressure: f32,
-    ) -> EventResponse {
-        let consumed = match &phase {
+    fn on_touch(&mut self, window: &Window, info: TouchInfo) -> EventResponse {
+        let consumed = match info.phase {
             egui::TouchPhase::Start | egui::TouchPhase::End | egui::TouchPhase::Cancel => {
                 self.egui_ctx.wants_pointer_input()
             }
             egui::TouchPhase::Move => self.egui_ctx.is_using_pointer(),
         };
 
-        let pos = into_poiner_pos_in_points_f32(&self.egui_ctx, window, x, y);
+        let pos = into_poiner_pos_in_points_f32(&self.egui_ctx, window, info.x, info.y);
         self.pointer_pos_in_points = Some(pos);
         self.egui_input.events.push(egui::Event::Touch {
-            device_id: egui::TouchDeviceId(touch_id as u64),
-            id: egui::TouchId::from(finger_id as u64),
-            phase,
+            device_id: egui::TouchDeviceId(info.touch_id as u64),
+            id: egui::TouchId::from(info.finger_id as u64),
+            phase: info.phase,
             pos,
-            force: Some(pressure),
+            force: Some(info.pressure),
         });
+
         EventResponse {
             repaint: true,
             consumed,
@@ -760,4 +734,13 @@ pub fn into_egui_physical_key(scancode: Scancode) -> Option<Key> {
 
         _ => None,
     }
+}
+
+struct TouchInfo {
+    phase: egui::TouchPhase,
+    touch_id: i64,
+    finger_id: i64,
+    x: f32,
+    y: f32,
+    pressure: f32,
 }
