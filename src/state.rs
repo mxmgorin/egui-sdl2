@@ -257,36 +257,60 @@ impl State {
                     consumed: false,
                 }
             }
-            FingerDown { touch_id, finger_id, x, y, pressure, .. } => {
-                self.on_touch(window, TouchInfo {
+            FingerDown {
+                touch_id,
+                finger_id,
+                x,
+                y,
+                pressure,
+                ..
+            } => self.on_touch(
+                window,
+                TouchInfo {
                     phase: egui::TouchPhase::Start,
                     touch_id: *touch_id,
                     finger_id: *finger_id,
                     x: *x,
                     y: *y,
                     pressure: *pressure,
-                })
-            }
-            FingerUp { touch_id, finger_id, x, y, pressure, .. } => {
-                self.on_touch(window, TouchInfo {
+                },
+            ),
+            FingerUp {
+                touch_id,
+                finger_id,
+                x,
+                y,
+                pressure,
+                ..
+            } => self.on_touch(
+                window,
+                TouchInfo {
                     phase: egui::TouchPhase::End,
                     touch_id: *touch_id,
                     finger_id: *finger_id,
                     x: *x,
                     y: *y,
                     pressure: *pressure,
-                })
-            }
-            FingerMotion { touch_id, finger_id, x, y, pressure, .. } => {
-                self.on_touch(window, TouchInfo {
+                },
+            ),
+            FingerMotion {
+                touch_id,
+                finger_id,
+                x,
+                y,
+                pressure,
+                ..
+            } => self.on_touch(
+                window,
+                TouchInfo {
                     phase: egui::TouchPhase::Move,
                     touch_id: *touch_id,
                     finger_id: *finger_id,
                     x: *x,
                     y: *y,
                     pressure: *pressure,
-                })
-            }
+                },
+            ),
             _ => EventResponse::default(),
         }
     }
