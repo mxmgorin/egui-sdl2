@@ -26,7 +26,6 @@ pub struct EventResponse {
 ///
 /// Instantiate one of these per viewport/window.
 pub struct State {
-    /// Shared clone.
     egui_ctx: egui::Context,
     egui_input: egui::RawInput,
     start_time: std::time::Instant,
@@ -42,7 +41,7 @@ pub struct State {
 /// Contains egui icon and allocation of sdl2 cursor.
 struct CurrentCursor {
     icon: egui::CursorIcon,
-    _cursor: sdl2::mouse::Cursor,
+    _cursor: sdl2::mouse::Cursor, // keep reference
 }
 
 impl State {
@@ -160,7 +159,7 @@ impl State {
                 mouse_btn, x, y, ..
             } => self.on_mouse_button_event(window, *mouse_btn, false, *x, *y),
             MouseMotion { x, y, .. } => {
-                let pos = into_poiner_pos_in_points(&self.egui_ctx, window, *x, *y);
+                let pos = poiner_pos_in_points(&self.egui_ctx, window, *x as f32, *y as f32);
                 self.pointer_pos_in_points = Some(pos);
                 self.egui_input.events.push(egui::Event::PointerMoved(pos));
                 EventResponse {
@@ -315,6 +314,7 @@ impl State {
         }
     }
 
+    #[inline]
     fn on_touch(&mut self, window: &Window, info: TouchInfo) -> EventResponse {
         let consumed = match info.phase {
             egui::TouchPhase::Start | egui::TouchPhase::End | egui::TouchPhase::Cancel => {
@@ -323,7 +323,7 @@ impl State {
             egui::TouchPhase::Move => self.egui_ctx.is_using_pointer(),
         };
 
-        let pos = into_poiner_pos_in_points_f32(&self.egui_ctx, window, info.x, info.y);
+        let pos = poiner_pos_in_points(&self.egui_ctx, window, info.x, info.y);
         self.pointer_pos_in_points = Some(pos);
         self.egui_input.events.push(egui::Event::Touch {
             device_id: egui::TouchDeviceId(info.touch_id as u64),
@@ -408,9 +408,8 @@ impl State {
             return EventResponse::default();
         };
 
-        let pos = into_poiner_pos_in_points(&self.egui_ctx, window, x, y);
+        let pos = poiner_pos_in_points(&self.egui_ctx, window, x as f32, y as f32);
         self.pointer_pos_in_points = Some(pos);
-
         self.egui_input.events.push(egui::Event::PointerButton {
             pos,
             button,
@@ -443,7 +442,6 @@ impl State {
             repeat,
             modifiers: self.egui_input.modifiers,
         });
-
         // When pressing the Tab key, egui focuses the first focusable element, hence Tab always consumes.
         let consumed = self.egui_ctx.wants_keyboard_input() || key == Key::Tab;
         EventResponse {
@@ -452,21 +450,18 @@ impl State {
         }
     }
 
+    #[inline]
     fn on_size_chage(&mut self, window: &Window) {
         self.window_size = window.size();
-        self.update_native_pixels_per_point(window);
         self.egui_input.screen_rect = new_screen_rect(&self.egui_ctx, window);
-    }
-
-    fn update_native_pixels_per_point(&mut self, window: &Window) {
-        let native_pixels_per_point = native_pixels_per_point(window);
         self.egui_input
             .viewports
             .entry(self.viewport_id)
             .or_default()
-            .native_pixels_per_point = Some(native_pixels_per_point);
+            .native_pixels_per_point = Some(native_pixels_per_point(window));
     }
 
+    #[inline]
     fn set_cursor_icon(&mut self, cursor_icon: egui::CursorIcon) {
         if let Some(cursor) = &self.current_cursor {
             if cursor.icon == cursor_icon {
@@ -496,17 +491,7 @@ impl State {
 }
 
 #[inline]
-pub fn into_poiner_pos_in_points(
-    egui_ctx: &egui::Context,
-    window: &Window,
-    x: i32,
-    y: i32,
-) -> egui::Pos2 {
-    into_poiner_pos_in_points_f32(egui_ctx, window, x as f32, y as f32)
-}
-
-#[inline]
-pub fn into_poiner_pos_in_points_f32(
+pub fn poiner_pos_in_points(
     egui_ctx: &egui::Context,
     window: &Window,
     x: f32,
@@ -516,6 +501,7 @@ pub fn into_poiner_pos_in_points_f32(
     egui::pos2(x, y) / pixels_per_point
 }
 
+#[inline]
 pub fn into_egui_modifiers(m: Mod) -> Modifiers {
     let mut mods = Modifiers::NONE;
 
@@ -595,6 +581,7 @@ pub fn native_pixels_per_point(window: &Window) -> f32 {
     }
 }
 
+#[inline]
 pub fn into_egui_button(btn: MouseButton) -> Option<PointerButton> {
     match btn {
         MouseButton::Left => Some(egui::PointerButton::Primary),
@@ -608,7 +595,6 @@ pub fn into_egui_button(btn: MouseButton) -> Option<PointerButton> {
 
 pub fn into_egui_key(key: Keycode) -> Option<Key> {
     Some(match key {
-        // Arrows
         Keycode::Left => Key::ArrowLeft,
         Keycode::Up => Key::ArrowUp,
         Keycode::Right => Key::ArrowRight,
