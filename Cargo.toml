@@ -5,11 +5,12 @@ edition = "2021"
 authors = ["troidem <mxmgorin@gmail.com>"]
 description = "Bindings for using egui with sdl2"
 readme = "README.md"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/mxmgorin/egui-sdl2"
 homepage = "https://github.com/mxmgorin/egui-sdl2"
 keywords = ["sdl2", "egui", "gui", "gamedev"]
 categories = ["gui", "gamedev"]
+include = ["../LICENSE-APACHE", "../LICENSE-MIT", "**/*.rs", "Cargo.toml"]
 
 [features]
 default = ["links", "glow-backend"]
