@@ -257,7 +257,87 @@ impl State {
                     consumed: false,
                 }
             }
+            FingerDown {
+                touch_id,
+                finger_id,
+                x,
+                y,
+                pressure,
+                ..
+            } => self.on_touch(
+                window,
+                egui::TouchPhase::Start,
+                *touch_id,
+                *finger_id,
+                *x,
+                *y,
+                *pressure,
+            ),
+            FingerUp {
+                touch_id,
+                finger_id,
+                x,
+                y,
+                pressure,
+                ..
+            } => self.on_touch(
+                window,
+                egui::TouchPhase::End,
+                *touch_id,
+                *finger_id,
+                *x,
+                *y,
+                *pressure,
+            ),
+            FingerMotion {
+                touch_id,
+                finger_id,
+                x,
+                y,
+                pressure,
+                ..
+            } => self.on_touch(
+                window,
+                egui::TouchPhase::Move,
+                *touch_id,
+                *finger_id,
+                *x,
+                *y,
+                *pressure,
+            ),
             _ => EventResponse::default(),
+        }
+    }
+
+    fn on_touch(
+        &mut self,
+        window: &Window,
+        phase: egui::TouchPhase,
+        touch_id: i64,
+        finger_id: i64,
+        x: f32,
+        y: f32,
+        pressure: f32,
+    ) -> EventResponse {
+        let consumed = match &phase {
+            egui::TouchPhase::Start | egui::TouchPhase::End | egui::TouchPhase::Cancel => {
+                self.egui_ctx.wants_pointer_input()
+            }
+            egui::TouchPhase::Move => self.egui_ctx.is_using_pointer(),
+        };
+
+        let pos = into_poiner_pos_in_points_f32(&self.egui_ctx, window, x, y);
+        self.pointer_pos_in_points = Some(pos);
+        self.egui_input.events.push(egui::Event::Touch {
+            device_id: egui::TouchDeviceId(touch_id as u64),
+            id: egui::TouchId::from(finger_id as u64),
+            phase,
+            pos,
+            force: Some(pressure),
+        });
+        EventResponse {
+            repaint: true,
+            consumed,
         }
     }
 
@@ -424,8 +504,18 @@ pub fn into_poiner_pos_in_points(
     x: i32,
     y: i32,
 ) -> egui::Pos2 {
+    into_poiner_pos_in_points_f32(egui_ctx, window, x as f32, y as f32)
+}
+
+#[inline]
+pub fn into_poiner_pos_in_points_f32(
+    egui_ctx: &egui::Context,
+    window: &Window,
+    x: f32,
+    y: f32,
+) -> egui::Pos2 {
     let pixels_per_point = pixels_per_point(egui_ctx, window);
-    egui::pos2(x as f32, y as f32) / pixels_per_point
+    egui::pos2(x, y) / pixels_per_point
 }
 
 pub fn into_egui_modifiers(m: Mod) -> Modifiers {
