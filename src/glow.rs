@@ -1,3 +1,23 @@
+//! Integration between [`egui`] and [`glow`] for SDL2 applications.
+//!
+//! This module provides [`EguiGlow`], a convenience wrapper that bundles
+//! together:
+//! - [`egui::Context`] for running your UI
+//! - [`State`] for event/input handling
+//! - [`egui_glow::Painter`] for rendering with OpenGL (via [`glow`])
+//!
+//! # When to use
+//! Use [`EguiGlow`] if you want to render egui using OpenGL through glow
+//! in an SDL2 application. If you prefer SDL2’s `Canvas` renderer, see the
+//! [`crate::canvas`] module instead.
+//!
+//! # Usage
+//! Typical usage is to:
+//! 1. Create an [`EguiGlow`] for your SDL2 window and GL context
+//! 2. Pass SDL2 events to [`State::on_event`]
+//! 3. Call [`egui::Context::run`] providing your UI fuction
+//! 4. Paint egui output via [`EguiGlow::paint`]
+//!
 use crate::{EguiBackend, PainterTrait, State};
 use std::sync::Arc;
 

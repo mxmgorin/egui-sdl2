@@ -1,3 +1,17 @@
+//! State management for egui + SDL2 integration.
+//!
+//! This module provides [`State`], which is responsible for translating
+//! SDL2 events and window data into egui input/output.
+//! Each SDL2 window (viewport) should have its own [`State`] instance.
+//!
+//!  # Usage
+//! Typical usage is to:
+//! 1. Create a [`State`] from an SDL2 [`Window`]
+//! 2. Call [`State::on_event`] for every SDL2 event
+//! 3. Retrieve input via [`State::take_egui_input`] before each frame
+//! 4. Use [`State::egui_ctx`] to run your egui UI code
+//! 5. Apply [`egui::PlatformOutput`] (cursor, clipboard, etc.)
+//!
 use egui::{Key, Modifiers, MouseWheelUnit, PointerButton, Pos2, Rect};
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;

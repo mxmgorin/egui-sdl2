@@ -1,3 +1,22 @@
+//! Integration between [`egui`] and SDL2’s [`Canvas`] API.
+//!
+//! This module provides [`EguiCanvas`], a convenience wrapper that bundles
+//! together:
+//! - [`egui::Context`] for running your UI
+//! - [`State`] for event and input handling
+//! - [`Painter`] for rendering using [`sdl2::render::Canvas`]
+//!
+//! # When to use
+//! Use [`EguiCanvas`] if you want to render egui using SDL2’s 2D canvas API
+//! instead of OpenGL.
+//!
+//! # Usage
+//! Typical usage is to:
+//! 1. Create an [`EguiCanvas`] for your SDL2 window and canvas
+//! 2. Pass SDL2 events to [`State::on_event`]
+//! 3. Call [`egui::Context::run`] providing our UI function
+//! 4. Paint egui output via [`EguiCanvas::paint`]
+//!
 use crate::{painter::Painter, EguiBackend, State};
 use egui::ViewportId;
 

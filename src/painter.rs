@@ -1,3 +1,8 @@
+//! Canvas backend for egui-sdl2.
+//!
+//! This module provides [`Painter`], which integrates egui rendering with
+//! SDL2’s [`Canvas<Window>`].
+
 use egui::epaint::{ImageDelta, Primitive};
 use egui::{ClippedPrimitive, TexturesDelta};
 use sdl2::pixels::PixelFormatEnum;

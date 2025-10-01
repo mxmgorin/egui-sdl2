@@ -1,4 +1,27 @@
-// re-export
+//! # egui-sdl2
+//!
+//! Integration between [`egui`](https://github.com/emilk/egui) and
+//! [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2).
+//!
+//! ## Features
+//! - Translate SDL2 events into egui.
+//! - Handle egui's `PlatformOutput` (clipboard, cursor updates, links).
+//! - Render with `glow` (`glow-backend` feature).
+//! - Render with SDL2 canvas (`canvas-backend` feature).
+//!
+//! ## Usage
+//! ```no_run
+//! use egui_sdl2::EguiCanvas;
+//!
+//! // Create SDL2 window, then:
+//! let mut egui = EguiCanvas::new(window);
+//! // Feed SDL2 events into egui:
+//! egui.state.handle_event(&event);
+//! // Call `run` + `paint` each frame:
+//! egui.run(ui_fn);
+//! egui.paint();
+//! ```
+
 pub use egui;
 #[cfg(feature = "glow-backend")]
 pub use egui_glow;
