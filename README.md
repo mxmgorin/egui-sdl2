@@ -20,7 +20,7 @@ Both `egui` and `sdl2` are re-exported for convenience. The `sdl2` re-export inc
 
 ## Usage
 
-To get started, create an `EguiGlow` or `EguiCanvas` instance to manage rendering. Pass SDL2 events to it, then call `run` and `paint` each frame. If you only need event handling, you can use the only `State` type.
+To get started, create an [`EguiGlow`](https://docs.rs/egui-sdl2/latest/egui_sdl2/glow/index.html) or [`EguiCanvas`](https://docs.rs/egui-sdl2/latest/egui_sdl2/canvas/index.html) instance to manage rendering. Pass SDL2 events to it, then call `run` and `paint` each frame. For event handling only, you can use the [`State`](https://docs.rs/egui-sdl2/latest/egui_sdl2/state/index.html) type.
 Examples are available in the [examples/](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/) directory. To run the `canvas` example:
 
 ```sh
