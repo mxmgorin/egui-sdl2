@@ -1,6 +1,6 @@
 [package]
 name = "egui-sdl2"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["troidem <mxmgorin@gmail.com>"]
 description = "egui + SDL2: event handling and rendering via OpenGL or Canvas "

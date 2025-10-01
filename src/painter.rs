@@ -16,7 +16,7 @@ use std::os::raw::c_int;
 #[cfg(target_endian = "little")]
 const PIXEL_FORMAT: PixelFormatEnum = PixelFormatEnum::ABGR8888;
 #[cfg(target_endian = "big")]
-const SDL_EGUI_FORMAT: PixelFormatEnum = PixelFormatEnum::RGBA8888;
+const PIXEL_FORMAT: PixelFormatEnum = PixelFormatEnum::RGBA8888;
 
 const BYTES_PER_PIXEL: usize = 4;
 
