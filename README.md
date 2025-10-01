@@ -7,14 +7,14 @@
 
 # egui-sdl2
 
-This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2). It also includes optional OpenGL rendering via [`glow`](https://crates.io/crates/glow) and software rendering via `sdl2::render::Canvas`. The implementation is based on the design of the official egui-winit and egui_glow crates.
+This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2). It also includes optional OpenGL rendering via [`glow`](https://crates.io/crates/glow) and software rendering via [`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html). The implementation is based on the design of the official egui-winit and egui_glow crates.
 
 Features:
 
 - Translate SDL2 events into [`egui`] events.
 - Handle [`egui::PlatformOutput`] (clipboard, cursor updates, links).
 - Render with OpenGL via [`glow`] (`glow-backend` feature).
-- Render with the SDL2 software renderer via [`sdl2::render::Canvas`] (`canvas-backend` feature).
+- Render with the SDL2 software renderer via [`Canvas`] (`canvas-backend` feature).
 
 Both `egui` and `sdl2` are re-exported for convenience. The `sdl2` re-export includes all feature flags available to use.
 

@@ -36,6 +36,7 @@ pub use sdl2;
 pub mod canvas;
 #[cfg(feature = "glow-backend")]
 pub mod glow;
+#[cfg(feature = "canvas-backend")]
 pub mod painter;
 pub mod state;
 
@@ -43,8 +44,11 @@ pub mod state;
 pub use canvas::*;
 #[cfg(feature = "glow-backend")]
 pub use glow::*;
+#[cfg(feature = "canvas-backend")]
+pub use painter::*;
 pub use state::*;
 
+#[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]
 struct EguiBackend {
     pub ctx: egui::Context,
 
@@ -54,6 +58,7 @@ struct EguiBackend {
     textures_delta: egui::TexturesDelta,
 }
 
+#[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]
 impl EguiBackend {
     pub fn new(ctx: egui::Context) -> Self {
         Self {
@@ -101,6 +106,7 @@ impl EguiBackend {
     }
 }
 
+#[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]
 trait PainterTrait {
     fn paint_primitives(
         &mut self,
