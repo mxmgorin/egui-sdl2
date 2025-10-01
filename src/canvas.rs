@@ -1,4 +1,4 @@
-//! Integration between [`egui`] and SDL2’s [`Canvas`] API.
+//! Integration between [`egui`] and SDL2’s [`sdl2::render::Canvas`] API.
 //!
 //! This module provides [`EguiCanvas`], a convenience wrapper that bundles
 //! together:
@@ -20,7 +20,7 @@
 use crate::{painter::Painter, EguiBackend, State};
 use egui::ViewportId;
 
-/// Integration between [`egui`] and [`sdl2::canvas`] for app based on [`sdl2`].
+/// Integration between [`egui`] and [`sdl2::render::Canvas`] for app based on [`sdl2`].
 pub struct EguiCanvas {
     backend: EguiBackend,
     pub ctx: egui::Context,

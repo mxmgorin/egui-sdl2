@@ -9,7 +9,7 @@
 //! 1. Create a [`State`] from an SDL2 [`Window`]
 //! 2. Call [`State::on_event`] for every SDL2 event
 //! 3. Retrieve input via [`State::take_egui_input`] before each frame
-//! 4. Use [`State::egui_ctx`] to run your egui UI code
+//! 4. Run your egui UI code
 //! 5. Apply [`egui::PlatformOutput`] (cursor, clipboard, etc.)
 //!
 use egui::{Key, Modifiers, MouseWheelUnit, PointerButton, Pos2, Rect};
@@ -144,8 +144,6 @@ impl State {
     /// as well as setting [the time](egui::RawInput::time)
     ///
     /// You need to set [`egui::RawInput::viewports`] yourself though.
-    /// Use [`update_viewport_info`] to update the info for each
-    /// viewport.
     #[inline]
     pub fn take_egui_input(&mut self) -> egui::RawInput {
         self.egui_input.time = Some(self.start_time.elapsed().as_secs_f64());
@@ -157,7 +155,7 @@ impl State {
 
     /// Call this when there is a new event.
     ///
-    /// The result can be found in [`Self::egui_input`] and be extracted with [`Self::take_egui_input`].
+    /// The result can be extracted with [`Self::take_egui_input`].
     pub fn on_event(
         &mut self,
         window: &sdl2::video::Window,

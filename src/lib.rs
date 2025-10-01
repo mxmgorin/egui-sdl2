@@ -4,21 +4,26 @@
 //! [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2).
 //!
 //! ## Features
-//! - Translate SDL2 events into egui.
-//! - Handle egui's `PlatformOutput` (clipboard, cursor updates, links).
-//! - Render with `glow` (`glow-backend` feature).
-//! - Render with SDL2 canvas (`canvas-backend` feature).
+//! - Translate SDL2 events into [`egui`] events.
+//! - Handle [`egui::PlatformOutput`] (clipboard, cursor updates, links).
+//! - Render with OpenGL via [`glow`] (`glow-backend` feature).
+//! - Render with the SDL2 software renderer via [`sdl2::render::Canvas`] (`canvas-backend` feature).
 //!
 //! ## Usage
 //! ```no_run
-//! use egui_sdl2::EguiCanvas;
-//!
-//! // Create SDL2 window, then:
-//! let mut egui = EguiCanvas::new(window);
+//! // Create SDL2 window:
+//! let sdl = sdl2::init().unwrap();
+//! let video = sdl.video().unwrap();
+//! let window = video.window("Egui SDL2 Canvas", 800, 600).build().unwrap();
+//! let mut event_pump = sdl.event_pump().unwrap();
+//! // Create egui renderer:
+//! let mut egui = egui_sdl2::EguiCanvas::new(window);
 //! // Feed SDL2 events into egui:
-//! egui.state.handle_event(&event);
+//! let window = egui.painter.canvas.window();
+//! let event = event_pump.wait_event();
+//! egui.state.on_event(window, &event);
 //! // Call `run` + `paint` each frame:
-//! egui.run(ui_fn);
+//! egui.run(|ctx: &egui::Context| {});
 //! egui.paint();
 //! ```
 

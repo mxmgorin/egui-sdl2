@@ -10,7 +10,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas, Texture, TextureCreator};
 use sdl2::sys::{SDL_Color, SDL_FPoint, SDL_Vertex};
 use sdl2::video::{Window, WindowContext};
-use sdl2_sys::{SDL_RenderGeometry, SDL_Renderer, SDL_Texture};
+use sdl2_sys::{SDL_RenderGeometry};
 use std::collections::HashMap;
 use std::os::raw::c_int;
 
@@ -24,7 +24,7 @@ const BYTES_PER_PIXEL: usize = 4;
 /// An Canvas painter using [`sdl2`].
 ///
 /// This is responsible for painting egui and managing egui textures.
-/// You can access the underlying [`sdl2::Window`] with [`Self::Window`].
+/// You can access the underlying [`sdl2::video::Window`] with [`Self::canvas`].
 ///
 /// This struct must be destroyed with [`Painter::destroy`] before dropping, to ensure
 /// objects have been properly deleted and are not leaked.
@@ -68,7 +68,7 @@ impl Painter {
         paint_jobs: Vec<ClippedPrimitive>,
     ) -> Result<(), String> {
         for (id, delta) in &textures_delta.set {
-            self.set_texture(*id, &delta);
+            self.set_texture(*id, delta);
         }
 
         self.paint_primitives(pixels_per_point, paint_jobs);
@@ -104,7 +104,7 @@ impl Painter {
             .entry(id)
             .or_insert_with(|| create_texture(&self.texture_creator, w, h));
         let rect = delta.pos.map(|[x, y]| Rect::new(x as i32, y as i32, w, h));
-        tex.update(rect, &bytes, pitch).unwrap();
+        tex.update(rect, bytes, pitch).unwrap();
     }
 
     pub fn free_texture(&mut self, id: &egui::TextureId) {
@@ -120,7 +120,7 @@ impl Painter {
         let texture_ptr = self
             .textures
             .get(&mesh.texture_id)
-            .map(|t| t.raw() as *mut SDL_Texture)
+            .map(|t| t.raw())
             .unwrap_or(std::ptr::null_mut()); // egui may draw untextured shape (nullptr in SDL_RenderGeometry)
 
         // Compute clip rectangle
@@ -148,7 +148,7 @@ impl Painter {
         // Call SDL
         let rv = unsafe {
             SDL_RenderGeometry(
-                self.canvas.raw() as *mut SDL_Renderer,
+                self.canvas.raw(),
                 texture_ptr,
                 if verts_len == 0 {
                     std::ptr::null()
