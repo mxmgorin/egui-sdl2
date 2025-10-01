@@ -1,9 +1,5 @@
-use glow::HasContext;
-use sdl2::{
-    event::{Event, WindowEvent},
-    video::GLContext,
-};
-use std::{sync::Arc, time::Duration};
+use sdl2::event::{Event, WindowEvent};
+use std::time::Duration;
 
 fn main() {
     let sdl = sdl2::init().unwrap();
@@ -24,9 +20,7 @@ fn main() {
 }
 
 struct App {
-    _gl_ctx: GLContext,
-    window: sdl2::video::Window,
-    egui: egui_sdl2::EguiGlow,
+    egui: egui_sdl2::EguiCanvas,
     // state
     multiline_text: String,
     slider_value: f32,
@@ -43,23 +37,13 @@ impl App {
     pub fn new(sdl: &sdl2::Sdl) -> Self {
         let video = sdl.video().unwrap();
         let window = video
-            .window("Egui-sdl2", 800, 600)
-            .opengl()
+            .window("Egui SDL2 Canvas", 800, 600)
             .resizable()
             .build()
             .unwrap();
-        let gl_ctx = window
-            .gl_create_context()
-            .expect("Failed to create GL context");
-        window.gl_make_current(&gl_ctx).unwrap();
-        let glow_ctx = Arc::new(unsafe {
-            glow::Context::from_loader_function(|name| video.gl_get_proc_address(name) as *const _)
-        });
-        let egui = egui_sdl2::EguiGlow::new(&window, glow_ctx, None, false);
+        let egui = egui_sdl2::EguiCanvas::new(window);
 
         Self {
-            _gl_ctx: gl_ctx,
-            window,
             egui,
             running: true,
             multiline_text: "Cut, copy, paste here".to_string(),
@@ -68,7 +52,10 @@ impl App {
     }
 
     pub fn handle_event(&mut self, event: &Event) {
-        let resp = self.egui.state.on_event(&self.window, event);
+        let resp = self
+            .egui
+            .state
+            .on_event(self.egui.painter.canvas.window(), event);
 
         if !resp.consumed {
             if let Event::Window {
@@ -102,11 +89,12 @@ impl App {
     }
 
     pub fn draw(&mut self) {
-        unsafe {
-            self.egui.painter.gl().clear_color(0.0, 0.0, 0.0, 1.0);
-            self.egui.painter.gl().clear(glow::COLOR_BUFFER_BIT);
-        }
+        self.egui
+            .painter
+            .canvas
+            .set_draw_color(sdl2::pixels::Color::RGBA(0, 0, 0, 1));
+        self.egui.painter.canvas.clear();
         self.egui.paint();
-        self.window.gl_swap_window();
+        self.egui.painter.canvas.present();
     }
 }
