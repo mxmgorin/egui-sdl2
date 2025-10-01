@@ -4,7 +4,7 @@
 //! SDL2’s [`Canvas<Window>`].
 
 use egui::epaint::{ImageDelta, Primitive};
-use egui::{ClippedPrimitive, TexturesDelta};
+use egui::{ClippedPrimitive, ImageData, TexturesDelta};
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas, Texture, TextureCreator};
@@ -15,9 +15,11 @@ use std::collections::HashMap;
 use std::os::raw::c_int;
 
 #[cfg(target_endian = "little")]
-const SDL_EGUI_FORMAT: PixelFormatEnum = PixelFormatEnum::ABGR8888;
+const PIXEL_FORMAT: PixelFormatEnum = PixelFormatEnum::ABGR8888;
 #[cfg(target_endian = "big")]
 const SDL_EGUI_FORMAT: PixelFormatEnum = PixelFormatEnum::RGBA8888;
+
+const BYTES_PER_PIXEL: usize = 4;
 
 /// An Canvas painter using [`sdl2`].
 ///
@@ -84,6 +86,7 @@ impl Painter {
             match job.primitive {
                 Primitive::Mesh(mesh) => self.paint_mesh(pixels_per_point, job.clip_rect, mesh),
                 Primitive::Callback(_callback) => {
+                    // TODO
                     log::warn!("PaintCallbacks are not supported")
                 }
             }
@@ -91,34 +94,17 @@ impl Painter {
     }
 
     pub fn set_texture(&mut self, id: egui::TextureId, delta: &ImageDelta) {
-        let mut _buf: Option<Vec<u8>> = None;
-
-        let (bytes, w, h): (&[u8], u32, u32) = match &delta.image {
-            egui::ImageData::Color(img) => {
-                let bytes: &[u8] = bytemuck::cast_slice(img.pixels.as_ref());
-                (bytes, img.width() as u32, img.height() as u32)
-            }
-        };
-
-        const BYTES_PER_PIXEL: usize = 4;
+        let ImageData::Color(img) = &delta.image;
+        let bytes: &[u8] = bytemuck::cast_slice(img.pixels.as_ref());
+        let w = img.width() as u32;
+        let h = img.height() as u32;
         let pitch = (w as usize) * BYTES_PER_PIXEL;
-
-        let tex = self.textures.entry(id).or_insert_with(|| {
-            let mut tex = self
-                .texture_creator
-                .create_texture_streaming(SDL_EGUI_FORMAT, w, h) // ABGR8888 on Little-Endian
-                .expect("Failed to create egui/sdl texture");
-            tex.set_blend_mode(BlendMode::Blend);
-
-            tex
-        });
-
-        if let Some([x, y]) = delta.pos {
-            let rect = Rect::new(x as i32, y as i32, w, h);
-            tex.update(rect, &bytes, pitch).unwrap();
-        } else {
-            tex.update(None, &bytes, pitch).unwrap();
-        }
+        let tex = self
+            .textures
+            .entry(id)
+            .or_insert_with(|| create_texture(&self.texture_creator, w, h));
+        let rect = delta.pos.map(|[x, y]| Rect::new(x as i32, y as i32, w, h));
+        tex.update(rect, &bytes, pitch).unwrap();
     }
 
     pub fn free_texture(&mut self, id: &egui::TextureId) {
@@ -129,6 +115,7 @@ impl Painter {
         }
     }
 
+    #[inline]
     fn paint_mesh(&mut self, pixels_per_point: f32, clip_rect: egui::Rect, mesh: egui::Mesh) {
         let texture_ptr = self
             .textures
@@ -136,52 +123,65 @@ impl Painter {
             .map(|t| t.raw() as *mut SDL_Texture)
             .unwrap_or(std::ptr::null_mut()); // egui may draw untextured shape (nullptr in SDL_RenderGeometry)
 
-        let clip = sdl2::rect::Rect::new(
-            (clip_rect.min.x * pixels_per_point) as i32,
-            (clip_rect.min.y * pixels_per_point) as i32,
-            ((clip_rect.max.x - clip_rect.min.x) * pixels_per_point) as u32,
-            ((clip_rect.max.y - clip_rect.min.y) * pixels_per_point) as u32,
+        // Compute clip rectangle
+        let min = clip_rect.min * pixels_per_point;
+        let max = clip_rect.max * pixels_per_point;
+        let clip_rect = sdl2::rect::Rect::new(
+            min.x as i32,
+            min.y as i32,
+            (max.x - min.x) as u32,
+            (max.y - min.y) as u32,
         );
-        self.canvas.set_clip_rect(clip);
+        self.canvas.set_clip_rect(clip_rect);
 
         let sdl_vertices: Vec<SDL_Vertex> = mesh
             .vertices
             .iter()
             .map(|v| into_sdl_vertex(v, pixels_per_point))
             .collect();
+        let verts_ptr = sdl_vertices.as_ptr();
         let verts_len = sdl_vertices.len() as c_int;
-        let verts_ptr = if verts_len == 0 {
-            std::ptr::null()
-        } else {
-            sdl_vertices.as_ptr()
-        };
 
+        let idxs_ptr = mesh.indices.as_ptr() as *const c_int;
         let idxs_len = mesh.indices.len() as c_int;
-        let idxs_ptr = if idxs_len == 0 {
-            std::ptr::null()
-        } else {
-            mesh.indices.as_ptr() as *const c_int
-        };
 
+        // Call SDL
         let rv = unsafe {
             SDL_RenderGeometry(
                 self.canvas.raw() as *mut SDL_Renderer,
                 texture_ptr,
-                verts_ptr,
+                if verts_len == 0 {
+                    std::ptr::null()
+                } else {
+                    verts_ptr
+                },
                 verts_len,
-                idxs_ptr,
+                if idxs_len == 0 {
+                    std::ptr::null()
+                } else {
+                    idxs_ptr
+                },
                 idxs_len,
             )
         };
 
         if rv != 0 {
-            log::error!("SDL_RenderGeometry failed with error {}", rv);
+            log::error!("SDL_RenderGeometry failed: {}", rv);
         }
 
         self.canvas.set_clip_rect(None);
     }
 }
 
+#[inline]
+fn create_texture(texture_creator: &TextureCreator<WindowContext>, w: u32, h: u32) -> Texture {
+    let mut tex = texture_creator
+        .create_texture_streaming(PIXEL_FORMAT, w, h) // ABGR8888 on Little-Endian
+        .expect("Failed to create sdl2 texture");
+    tex.set_blend_mode(BlendMode::Blend);
+
+    tex
+}
 #[inline]
 fn into_sdl_vertex(vertex: &egui::epaint::Vertex, pixels_per_point: f32) -> SDL_Vertex {
     SDL_Vertex {
