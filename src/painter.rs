@@ -10,7 +10,6 @@ use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas, Texture, TextureCreator};
 use sdl2::sys::{SDL_Color, SDL_FPoint, SDL_Vertex};
 use sdl2::video::{Window, WindowContext};
-use sdl2_sys::{SDL_RenderGeometry};
 use std::collections::HashMap;
 use std::os::raw::c_int;
 
@@ -147,7 +146,7 @@ impl Painter {
 
         // Call SDL
         let rv = unsafe {
-            SDL_RenderGeometry(
+            sdl2_sys::SDL_RenderGeometry(
                 self.canvas.raw(),
                 texture_ptr,
                 if verts_len == 0 {

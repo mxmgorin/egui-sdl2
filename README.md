@@ -7,7 +7,7 @@
 
 # egui-sdl2
 
-This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2). It also includes optional [`glow`](https://crates.io/crates/glow) and `canvas` support for rendering. Implementation follows the design of the official egui-winit and egui_glow crates, using them as references.
+This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2). It also includes optional OpenGL rendering via [`glow`](https://crates.io/crates/glow) and software rendering via `sdl2::render::Canvas`. The implementation is based on the design of the official egui-winit and egui_glow crates.
 
 Features:
 
