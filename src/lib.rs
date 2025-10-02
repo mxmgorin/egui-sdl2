@@ -36,21 +36,17 @@ pub use sdl2;
 pub mod canvas;
 #[cfg(feature = "glow-backend")]
 pub mod glow;
-#[cfg(feature = "canvas-backend")]
-pub mod painter;
 pub mod state;
 #[cfg(feature = "wgpu-backend")]
 pub mod wgpu;
 
 #[cfg(feature = "canvas-backend")]
-pub use canvas::*;
+pub use canvas::EguiCanvas;
 #[cfg(feature = "glow-backend")]
 pub use glow::*;
-#[cfg(feature = "canvas-backend")]
-pub use painter::*;
 pub use state::*;
 #[cfg(feature = "wgpu-backend")]
-pub use wgpu::*;
+pub use wgpu::EguiWgpu;
 
 /// Contains shared logic between different backends
 #[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]

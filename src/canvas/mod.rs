@@ -17,22 +17,22 @@
 //! 3. Call [`egui::Context::run`] providing our UI function
 //! 4. Paint egui output via [`EguiCanvas::paint`]
 //!
-use crate::{painter::Painter, EguiBackend, State};
-use egui::ViewportId;
+pub mod painter;
+pub use painter::*;
 
 /// Integration between [`egui`] and [`sdl2::render::Canvas`] for app based on [`sdl2`].
 pub struct EguiCanvas {
-    backend: EguiBackend,
+    backend: crate::EguiBackend,
     pub ctx: egui::Context,
-    pub state: State,
+    pub state: crate::State,
     pub painter: Painter,
 }
 
 impl EguiCanvas {
     pub fn new(window: sdl2::video::Window) -> Self {
         let ctx = egui::Context::default();
-        let state = crate::State::new(&window, ctx.clone(), ViewportId::ROOT);
-        let backend = EguiBackend::new(ctx.clone());
+        let state = crate::State::new(&window, ctx.clone(), egui::ViewportId::ROOT);
+        let backend = crate::EguiBackend::new(ctx.clone());
         let painter = Painter::new(window);
 
         Self {
