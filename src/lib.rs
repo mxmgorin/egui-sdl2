@@ -39,6 +39,8 @@ pub mod glow;
 #[cfg(feature = "canvas-backend")]
 pub mod painter;
 pub mod state;
+#[cfg(feature = "wgpu-backend")]
+pub mod wgpu;
 
 #[cfg(feature = "canvas-backend")]
 pub use canvas::*;
@@ -47,11 +49,13 @@ pub use glow::*;
 #[cfg(feature = "canvas-backend")]
 pub use painter::*;
 pub use state::*;
+#[cfg(feature = "wgpu-backend")]
+pub use wgpu::*;
 
+/// Contains shared logic between different backends
 #[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]
 struct EguiBackend {
     pub ctx: egui::Context,
-
     // output from the last run:
     shapes: Vec<egui::epaint::ClippedShape>,
     pixels_per_point: f32,
