@@ -6,8 +6,9 @@
 ![Apache](https://img.shields.io/badge/license-Apache-blue.svg)
 
 # egui-sdl2
-This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2), inluding event handling and multiple rendering backends with a consistent API. It supports optinal rendering backends:
- - Software rendering via [`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html) (`canvas-backend` feature)
+This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2), including event handling and multiple rendering backends with a consistent API. It supports optional rendering backends:
+
+ - Software via [`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html) (`canvas-backend` feature)
  - OpengGL via [`glow`](https://crates.io/crates/glow) (`glow-backend` feature)
  - WebgGPU via [`wgpu`](https://github.com/gfx-rs/wgpu) (`wgpu-backend` feature)
 
