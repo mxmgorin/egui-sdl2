@@ -6,21 +6,18 @@
 ![Apache](https://img.shields.io/badge/license-Apache-blue.svg)
 
 # egui-sdl2
+This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2), inluding event handling and multiple rendering backends with a consistent API. It supports optinal rendering backends:
+ - Software rendering via [`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html) (`canvas-backend` feature)
+ - OpengGL via [`glow`](https://crates.io/crates/glow) (`glow-backend` feature)
+ - WebgGPU via [`wgpu`](https://github.com/gfx-rs/wgpu) (`wgpu-backend` feature)
 
-This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2). It also includes optional OpenGL rendering via [`glow`](https://crates.io/crates/glow) and software rendering via [`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html). The implementation is based on the design of the official egui-winit and egui_glow crates.
-
-Features:
-
-- Translate SDL2 events into [`egui`] events.
-- Handle [`egui::PlatformOutput`] (clipboard, cursor updates, links).
-- Render with OpenGL via [`glow`] (`glow-backend` feature).
-- Render with the SDL2 software renderer via [`Canvas`] (`canvas-backend` feature).
+The implementation is based on the design of the official egui-winit, egui_glow, egui-wgpu crates, aming to make it easy to use SDL2 with egui.
 
 Both `egui` and `sdl2` are re-exported for convenience. The `sdl2` re-export includes all feature flags available to use.
 
 ## Usage
 
-To get started, create an [`EguiGlow`](https://docs.rs/egui-sdl2/latest/egui_sdl2/glow/index.html) or [`EguiCanvas`](https://docs.rs/egui-sdl2/latest/egui_sdl2/canvas/index.html) instance to manage rendering. Pass SDL2 events to `State::on_event`, then call `run` and `paint` each frame. For event handling only, you can use the [`State`](https://docs.rs/egui-sdl2/latest/egui_sdl2/state/index.html) type.
+To get started, create an [`EguiGlow`](https://docs.rs/egui-sdl2/latest/egui_sdl2/glow/index.html) or [`EguiCanvas`](https://docs.rs/egui-sdl2/latest/egui_sdl2/canvas/index.html) or [`EguiWgpu`](https://docs.rs/egui-sdl2/latest/egui_sdl2/wgpu/index.html) instance to manage rendering. Pass SDL2 events to `on_event`, then call `run` and `paint` each frame. For event handling only, you can use the [`State`](https://docs.rs/egui-sdl2/latest/egui_sdl2/state/index.html) type.
 Examples are available in the [examples/](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/) directory. To run the `canvas` example:
 
 ```sh
