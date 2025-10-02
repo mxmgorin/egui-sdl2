@@ -1,10 +1,24 @@
+//! Integration between [`egui`] and [`wgpu`](https://docs.rs/wgpu) API.
+//!
+//! This module provides [`EguiWgpu`], a convenience wrapper that bundles
+//! together:
+//! - [`egui::Context`] for running your UI
+//! - [`crate::State`] for event and input handling
+//! - [`Painter`] for rendering using [`wgpu`](https://docs.rs/wgpu)
+
+//! # Usage
+//! Typical usage is to:
+//! 1. Create an [`EguiWgpu`] for your SDL2 window
+//! 2. Pass SDL2 events to [`EguiWgpu::on_event`]
+//! 3. Call [`EguiWgpu::run`] providing our UI function
+//! 4. Paint egui output via [`EguiWgpu::paint`]
+//!
+
 use std::num::NonZeroU32;
-
-use crate::EventResponse;
-
 pub mod painter;
+pub use painter::*;
 
-/// Integration between [`egui`] and [`wgpu`] for app based on [`sdl2`].
+/// Integration between [`egui`] and [`wgpu`](https://docs.rs/wgpu) for app based on [`sdl2`].
 pub struct EguiWgpu {
     backend: crate::EguiBackend,
     viewport_id: egui::ViewportId,
@@ -38,22 +52,19 @@ impl EguiWgpu {
         }
     }
 
-    pub fn on_event(&mut self, event: &sdl2::event::Event) -> EventResponse {
+    pub fn on_event(&mut self, event: &sdl2::event::Event) -> crate::EventResponse {
         match event {
             sdl2::event::Event::Window {
                 window_id,
-                win_event,
+                win_event:
+                    sdl2::event::WindowEvent::Resized(w, h)
+                    | sdl2::event::WindowEvent::SizeChanged(w, h),
                 ..
-            } if *window_id == self.window.id() => match win_event {
-                sdl2::event::WindowEvent::SizeChanged(w, h) => {
-                    if *w > 0 && *h > 0 {
-                        let w = NonZeroU32::new(*w as u32).unwrap();
-                        let h = NonZeroU32::new(*h as u32).unwrap();
-                        self.painter.on_window_resized(self.viewport_id, w, h);
-                    }
-                }
-                _ => {}
-            },
+            } if *window_id == self.window.id() && *w > 0 && *h > 0 => {
+                let w = NonZeroU32::new(*w as u32).unwrap();
+                let h = NonZeroU32::new(*h as u32).unwrap();
+                self.painter.on_window_resized(self.viewport_id, w, h);
+            }
             _ => {}
         }
 

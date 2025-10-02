@@ -14,7 +14,7 @@ struct SurfaceState {
     height: u32,
 }
 
-/// Everything you need to paint egui with [`wgpu`] on [`sdl2`].
+/// Everything you need to paint egui with [`wgpu`](https://docs.rs/wgpu) on [`sdl2`].
 pub struct Painter {
     context: egui::Context,
     configuration: WgpuConfiguration,
@@ -36,7 +36,7 @@ pub struct Painter {
 }
 
 impl Painter {
-    /// Manages [`wgpu`] state, including surface state, required to render egui.
+    /// Manages [`wgpu`](https://docs.rs/wgpu) state, including surface state, required to render egui.
     ///
     /// Only the [`egui_wgpu::wgpu::Instance`] is initialized here. Device selection and the initialization
     /// of render + surface state is deferred until the painter is given its first window target
