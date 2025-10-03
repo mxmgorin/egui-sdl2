@@ -18,10 +18,9 @@
 //! // Create egui renderer:
 //! let mut egui = egui_sdl2::EguiCanvas::new(window);
 //! // Feed SDL2 events into egui:
-//! let window = egui.painter.canvas.window();
 //! let mut event_pump = sdl.event_pump().unwrap();
 //! let event = event_pump.wait_event();
-//! egui.state.on_event(window, &event);
+//! egui.on_event(&event);
 //! // Call `run` + `paint` each frame:
 //! egui.run(|ctx: &egui::Context| {});
 //! egui.paint();
