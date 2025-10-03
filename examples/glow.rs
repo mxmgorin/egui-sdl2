@@ -1,8 +1,10 @@
+use crate::common::UiExample;
 use sdl2::{
     event::{Event, WindowEvent},
     video::GLContext,
 };
 use std::{sync::Arc, time::Duration};
+mod common;
 
 fn main() {
     let sdl = sdl2::init().unwrap();
@@ -11,7 +13,7 @@ fn main() {
     const TARGET_FPS: f64 = 60.0;
     let sleep_dur = Duration::from_secs_f64(1.0 / TARGET_FPS);
 
-    while app.running {
+    while !app.ui.quit {
         for event in event_pump.poll_iter() {
             app.handle_event(&event);
         }
@@ -26,10 +28,7 @@ struct App {
     _gl_ctx: GLContext,
     window: sdl2::video::Window,
     egui: egui_sdl2::EguiGlow,
-    // state
-    multiline_text: String,
-    slider_value: f32,
-    pub running: bool,
+    ui: UiExample,
 }
 
 impl Drop for App {
@@ -60,9 +59,7 @@ impl App {
             _gl_ctx: gl_ctx,
             window,
             egui,
-            running: true,
-            multiline_text: "Cut, copy, paste here".to_string(),
-            slider_value: 0.0,
+            ui: UiExample::default(),
         }
     }
 
@@ -75,33 +72,17 @@ impl App {
                 ..
             } = event
             {
-                self.running = false;
+                self.ui.quit = true;
             }
         }
     }
 
     pub fn update(&mut self) {
-        self.egui.run(|ctx| {
-            egui::Window::new("Hello, world!").show(ctx, |ui| {
-                ui.label("Hello, world!");
-
-                if ui.button("Greet").clicked() {
-                    self.multiline_text = "Hello, world!".to_string();
-                    println!("{}", &self.multiline_text);
-                }
-                ui.text_edit_multiline(&mut self.multiline_text);
-                ui.add(egui::Slider::new(&mut self.slider_value, 0.0..=50.0).text("Slider"));
-                ui.separator();
-
-                if ui.button("Quit?").clicked() {
-                    self.running = false;
-                }
-            });
-        });
+        self.egui.run(|ctx| self.ui.update(ctx));
     }
 
     pub fn draw(&mut self) {
-        self.egui.clear([0.0, 0.0, 0.0, 1.0]);
+        self.egui.clear(self.ui.color);
         self.egui.paint();
         self.window.gl_swap_window();
     }
