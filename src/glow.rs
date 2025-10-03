@@ -71,6 +71,11 @@ impl EguiGlow {
         );
     }
 
+    pub fn clear(&self, color: [f32; 4]) {
+        let size = self.state.get_window_size();
+        self.painter.clear(size.into(), color);
+    }
+
     /// Call to release the allocated graphics resources.
     pub fn destroy(&mut self) {
         self.painter.destroy();

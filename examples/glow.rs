@@ -1,4 +1,3 @@
-use glow::HasContext;
 use sdl2::{
     event::{Event, WindowEvent},
     video::GLContext,
@@ -102,10 +101,7 @@ impl App {
     }
 
     pub fn draw(&mut self) {
-        unsafe {
-            self.egui.painter.gl().clear_color(0.0, 0.0, 0.0, 1.0);
-            self.egui.painter.gl().clear(glow::COLOR_BUFFER_BIT);
-        }
+        self.egui.clear([0.0, 0.0, 0.0, 1.0]);
         self.egui.paint();
         self.window.gl_swap_window();
     }
