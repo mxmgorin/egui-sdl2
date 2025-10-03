@@ -7,8 +7,7 @@ fn main() {
     let sdl = sdl2::init().unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
     let mut app = App::new(&sdl);
-    const TARGET_FPS: f64 = 60.0;
-    let sleep_dur = Duration::from_secs_f64(1.0 / TARGET_FPS);
+    let frame_dur = Duration::from_secs_f64(1.0 / common::TARGET_FPS);
 
     while !app.ui.quit {
         for event in event_pump.poll_iter() {
@@ -17,19 +16,15 @@ fn main() {
 
         app.update();
         app.draw();
-        std::thread::sleep(sleep_dur);
+        std::thread::sleep(frame_dur);
     }
+
+    app.shutdown();
 }
 
 struct App {
     egui: egui_sdl2::EguiCanvas,
     ui: UiExample,
-}
-
-impl Drop for App {
-    fn drop(&mut self) {
-        self.egui.destroy();
-    }
 }
 
 impl App {
@@ -46,6 +41,10 @@ impl App {
             egui,
             ui: UiExample::default(),
         }
+    }
+
+    pub fn shutdown(&mut self) {
+        self.egui.destroy();
     }
 
     pub fn handle_event(&mut self, event: &Event) {

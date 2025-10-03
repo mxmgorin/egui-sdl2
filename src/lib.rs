@@ -15,11 +15,11 @@
 //! let sdl = sdl2::init().unwrap();
 //! let video = sdl.video().unwrap();
 //! let window = video.window("Egui SDL2 Canvas", 800, 600).build().unwrap();
-//! let mut event_pump = sdl.event_pump().unwrap();
 //! // Create egui renderer:
 //! let mut egui = egui_sdl2::EguiCanvas::new(window);
 //! // Feed SDL2 events into egui:
 //! let window = egui.painter.canvas.window();
+//! let mut event_pump = sdl.event_pump().unwrap();
 //! let event = event_pump.wait_event();
 //! egui.state.on_event(window, &event);
 //! // Call `run` + `paint` each frame:

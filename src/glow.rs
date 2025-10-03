@@ -53,6 +53,7 @@ impl EguiGlow {
     }
 
     /// Call [`Self::paint`] later to paint.
+    #[inline]
     pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) {
         self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }
@@ -71,6 +72,7 @@ impl EguiGlow {
         );
     }
 
+    #[inline]
     pub fn clear(&self, color: [f32; 4]) {
         let size = self.state.get_window_size();
         self.painter.clear(size.into(), color);

@@ -1,3 +1,6 @@
+#[allow(dead_code)]
+pub const TARGET_FPS: f64 = 60.0;
+
 pub struct UiExample {
     pub multiline_text: String,
     pub slider_value: f32,

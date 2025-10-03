@@ -106,6 +106,7 @@ impl Painter {
         tex.update(rect, bytes, pitch).unwrap();
     }
 
+    #[inline]
     pub fn free_texture(&mut self, id: &egui::TextureId) {
         if let Some(tex) = self.textures.remove(id) {
             unsafe {
@@ -122,7 +123,6 @@ impl Painter {
             .map(|t| t.raw())
             .unwrap_or(std::ptr::null_mut()); // egui may draw untextured shape (nullptr in SDL_RenderGeometry)
 
-        // Compute clip rectangle
         let min = clip_rect.min * pixels_per_point;
         let max = clip_rect.max * pixels_per_point;
         let clip_rect = sdl2::rect::Rect::new(
@@ -133,19 +133,17 @@ impl Painter {
         );
         self.canvas.set_clip_rect(clip_rect);
 
-        let sdl_vertices: Vec<SDL_Vertex> = mesh
+        let vertices: Vec<SDL_Vertex> = mesh
             .vertices
             .iter()
             .map(|v| into_sdl_vertex(v, pixels_per_point))
             .collect();
-        let verts_ptr = sdl_vertices.as_ptr();
-        let verts_len = sdl_vertices.len() as c_int;
+        let verts_ptr = vertices.as_ptr();
+        let verts_len = vertices.len() as c_int;
+        let indcs_ptr = mesh.indices.as_ptr() as *const c_int;
+        let indcs_len = mesh.indices.len() as c_int;
 
-        let idxs_ptr = mesh.indices.as_ptr() as *const c_int;
-        let idxs_len = mesh.indices.len() as c_int;
-
-        // Call SDL
-        let rv = unsafe {
+        let result = unsafe {
             sdl2_sys::SDL_RenderGeometry(
                 self.canvas.raw(),
                 texture_ptr,
@@ -155,17 +153,17 @@ impl Painter {
                     verts_ptr
                 },
                 verts_len,
-                if idxs_len == 0 {
+                if indcs_len == 0 {
                     std::ptr::null()
                 } else {
-                    idxs_ptr
+                    indcs_ptr
                 },
-                idxs_len,
+                indcs_len,
             )
         };
 
-        if rv != 0 {
-            log::error!("SDL_RenderGeometry failed: {}", rv);
+        if result != 0 {
+            log::error!("SDL_RenderGeometry failed: {}", result);
         }
 
         self.canvas.set_clip_rect(None);

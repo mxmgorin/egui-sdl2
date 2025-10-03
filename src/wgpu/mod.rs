@@ -52,6 +52,7 @@ impl EguiWgpu {
         }
     }
 
+    #[inline]
     pub fn on_event(&mut self, event: &sdl2::event::Event) -> crate::EventResponse {
         match event {
             sdl2::event::Event::Window {
@@ -72,6 +73,7 @@ impl EguiWgpu {
     }
 
     /// Call [`Self::paint`] later to paint.
+    #[inline]
     pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) {
         self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }

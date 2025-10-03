@@ -7,8 +7,7 @@ fn main() {
     let sdl = sdl2::init().unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
     let mut app = pollster::block_on(App::new(&sdl));
-    const TARGET_FPS: f64 = 60.0;
-    let sleep_dur = Duration::from_secs_f64(1.0 / TARGET_FPS);
+    let frame_dur = Duration::from_secs_f64(1.0 / common::TARGET_FPS);
 
     while !app.ui.quit {
         for event in event_pump.poll_iter() {
@@ -17,7 +16,7 @@ fn main() {
 
         app.update();
         app.draw();
-        std::thread::sleep(sleep_dur);
+        std::thread::sleep(frame_dur);
     }
 }
 

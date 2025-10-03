@@ -43,11 +43,13 @@ impl EguiCanvas {
         }
     }
 
+    #[inline]
     pub fn on_event(&mut self, event: &sdl2::event::Event) -> crate::EventResponse {
         self.state.on_event(self.painter.canvas.window(), event)
     }
 
     /// Call [`Self::paint`] later to paint.
+    #[inline]
     pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) {
         self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }
@@ -66,6 +68,7 @@ impl EguiCanvas {
         }
     }
 
+    #[inline]
     pub fn clear(&mut self, color: [u8; 4]) {
         let color = sdl2::pixels::Color::RGBA(color[0], color[1], color[2], color[3]);
         self.painter.canvas.set_draw_color(color);
