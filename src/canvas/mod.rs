@@ -75,6 +75,11 @@ impl EguiCanvas {
         self.painter.canvas.clear();
     }
 
+    #[inline]
+    pub fn present(&mut self) {
+        self.painter.canvas.present();
+    }
+
     /// Call to release the allocated graphics resources.
     pub fn destroy(&mut self) {
         self.painter.destroy();

@@ -15,7 +15,6 @@ fn main() {
         }
 
         app.update();
-        app.draw();
         std::thread::sleep(frame_dur);
     }
 }
@@ -57,9 +56,6 @@ impl App {
 
     pub fn update(&mut self) {
         self.egui.run(|ctx| self.ui.update(ctx));
-    }
-
-    pub fn draw(&mut self) {
         self.egui.paint(self.ui.color);
     }
 }
