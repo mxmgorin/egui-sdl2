@@ -86,11 +86,7 @@ impl App {
     }
 
     pub fn draw(&mut self) {
-        self.egui
-            .painter
-            .canvas
-            .set_draw_color(sdl2::pixels::Color::RGBA(0, 0, 0, 1));
-        self.egui.painter.canvas.clear();
+        self.egui.clear([0, 0, 0, 1]);
         self.egui.paint();
         self.egui.painter.canvas.present();
     }

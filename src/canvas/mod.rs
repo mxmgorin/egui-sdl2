@@ -66,6 +66,12 @@ impl EguiCanvas {
         }
     }
 
+    pub fn clear(&mut self, color: [u8; 4]) {
+        let color = sdl2::pixels::Color::RGBA(color[0], color[1], color[2], color[3]);
+        self.painter.canvas.set_draw_color(color);
+        self.painter.canvas.clear();
+    }
+
     /// Call to release the allocated graphics resources.
     pub fn destroy(&mut self) {
         self.painter.destroy();
