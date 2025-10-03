@@ -18,14 +18,12 @@
 //! 3. Call [`egui::Context::run`] providing your UI fuction
 //! 4. Paint egui output via [`EguiGlow::paint`]
 //!
-use crate::{EguiBackend, PainterTrait, State};
-use std::sync::Arc;
 
 /// Integration between [`egui`] and [`glow`] for app based on [`sdl2`].
 pub struct EguiGlow {
-    backend: EguiBackend,
+    run_output: crate::EguiRunOutput,
     pub ctx: egui::Context,
-    pub state: State,
+    pub state: crate::State,
     pub painter: egui_glow::Painter,
 }
 
@@ -33,7 +31,7 @@ impl EguiGlow {
     /// For automatic shader version detection set `shader_version` to `None`.
     pub fn new(
         window: &sdl2::video::Window,
-        glow_ctx: Arc<glow::Context>,
+        glow_ctx: std::sync::Arc<glow::Context>,
         shader_version: Option<egui_glow::ShaderVersion>,
         dithering: bool,
     ) -> Self {
@@ -44,11 +42,11 @@ impl EguiGlow {
             .unwrap();
         let ctx = egui::Context::default();
         let state = crate::State::new(window, ctx.clone(), egui::ViewportId::ROOT);
-        let backend = EguiBackend::new(ctx.clone());
+        let run_output = crate::EguiRunOutput::default();
 
         Self {
             painter,
-            backend,
+            run_output,
             state,
             ctx,
         }
@@ -56,35 +54,25 @@ impl EguiGlow {
 
     /// Call [`Self::paint`] later to paint.
     pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) {
-        self.backend.run(&mut self.state, run_ui);
+        self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }
 
     /// Paint the results of the last call to [`Self::run`].
     pub fn paint(&mut self) {
-        self.backend.paint(&self.state, &mut self.painter);
+        let pixels_per_point = self.run_output.pixels_per_point;
+        let (textures_delta, shapes) = self.run_output.take();
+        let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
+        let screen_size = self.state.get_window_size();
+        self.painter.paint_and_update_textures(
+            screen_size.into(),
+            pixels_per_point,
+            &clipped_primitives,
+            &textures_delta,
+        );
     }
 
     /// Call to release the allocated graphics resources.
     pub fn destroy(&mut self) {
         self.painter.destroy();
-    }
-}
-
-impl PainterTrait for egui_glow::Painter {
-    fn paint_primitives(
-        &mut self,
-        screen_size_px: [u32; 2],
-        pixels_per_point: f32,
-        clipped_primitives: Vec<egui::ClippedPrimitive>,
-    ) {
-        self.paint_primitives(screen_size_px, pixels_per_point, &clipped_primitives);
-    }
-
-    fn set_texture(&mut self, tex_id: egui::TextureId, delta: &egui::epaint::ImageDelta) {
-        self.set_texture(tex_id, delta);
-    }
-
-    fn free_texture(&mut self, tex_id: egui::TextureId) {
-        self.free_texture(tex_id);
     }
 }

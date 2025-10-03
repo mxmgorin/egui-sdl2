@@ -48,29 +48,66 @@ pub use state::*;
 #[cfg(feature = "wgpu-backend")]
 pub use wgpu::EguiWgpu;
 
-/// Contains shared logic between different backends
-#[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]
-struct EguiBackend {
-    pub ctx: egui::Context,
-    // output from the last run:
-    shapes: Vec<egui::epaint::ClippedShape>,
-    pixels_per_point: f32,
-    textures_delta: egui::TexturesDelta,
+/// The results of running one frame of `egui`.
+///
+/// `EguiRunOutput` collects the renderable shapes, texture updates, and scale
+/// factor from a single `egui` run. It also provides convenience methods for
+/// updating its contents from an `egui::Context` and for draining the data
+/// when it is time to render.
+///
+/// This is typically created once per backend instance and reused across frames.
+pub struct EguiRunOutput {
+    /// The clipped shapes that should be rendered for the current frame.
+    ///
+    /// This is produced by egui’s tessellation step and represents what should
+    /// be drawn to the screen.
+    pub shapes: Vec<egui::epaint::ClippedShape>,
+
+    /// The logical-to-physical pixel scaling factor used by egui in this frame.
+    ///
+    /// Backends should respect this when converting coordinates to pixels.
+    pub pixels_per_point: f32,
+
+    /// The delta of texture updates required for this frame.
+    ///
+    /// Includes new textures to upload and old textures to free.
+    pub textures_delta: egui::TexturesDelta,
 }
 
-#[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]
-impl EguiBackend {
-    pub fn new(ctx: egui::Context) -> Self {
+impl Default for EguiRunOutput {
+    /// Creates an empty `EguiRunOutput` with no shapes, no texture updates,
+    /// and a scale factor of `1.0`.
+    fn default() -> Self {
         Self {
-            ctx,
             shapes: Default::default(),
             pixels_per_point: 1.0,
             textures_delta: Default::default(),
         }
     }
+}
 
+impl EguiRunOutput {
+    /// Run `egui` for one frame and update this output with the results.
+    ///
+    /// # Parameters
+    /// - `ctx`: The [`egui::Context`] used to run the UI.
+    /// - `state`: A backend state that provides input for egui and
+    ///   handles platform output (clipboard, cursor, etc.).
+    /// - `run_ui`: A closure that builds the UI using the given `egui::Context`.
+    ///
+    /// # Behavior
+    /// - Takes input events from `state`.
+    /// - Runs egui with the provided `run_ui` closure.
+    /// - Handles platform output via `state`.
+    /// - Stores the frame’s shapes, texture updates, and scale factor
+    ///   in this `EguiRunOutput`.
     #[inline]
-    pub fn run(&mut self, state: &mut State, run_ui: impl FnMut(&egui::Context)) {
+    pub fn update(
+        &mut self,
+        ctx: &egui::Context,
+        state: &mut State,
+        run_ui: impl FnMut(&egui::Context),
+    ) {
         let raw_input = state.take_egui_input();
         let egui::FullOutput {
             platform_output,
@@ -78,7 +115,7 @@ impl EguiBackend {
             textures_delta,
             shapes,
             pixels_per_point,
-        } = self.ctx.run(raw_input, run_ui);
+        } = ctx.run(raw_input, run_ui);
         state.handle_platform_output(platform_output);
 
         self.shapes = shapes;
@@ -86,34 +123,19 @@ impl EguiBackend {
         self.pixels_per_point = pixels_per_point;
     }
 
+    /// Take ownership of the texture updates and shapes for the current frame.
+    ///
+    /// This clears both fields in the struct, leaving them empty for the next frame.
+    ///
+    /// # Returns
+    /// - `(textures_delta, shapes)` where:
+    ///   - `textures_delta`: The [`egui::TexturesDelta`] with texture uploads/free requests.
+    ///   - `shapes`: The tessellated shapes that should be rendered.
     #[inline]
-    pub fn paint(&mut self, state: &State, painter: &mut impl PainterTrait) {
-        let mut textures_delta = std::mem::take(&mut self.textures_delta);
-
-        for (id, image_delta) in textures_delta.set {
-            painter.set_texture(id, &image_delta);
-        }
-
-        let pixels_per_point = self.pixels_per_point;
+    pub fn take(&mut self) -> (egui::TexturesDelta, Vec<egui::epaint::ClippedShape>) {
+        let textures_delta = std::mem::take(&mut self.textures_delta);
         let shapes = std::mem::take(&mut self.shapes);
-        let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
-        let size = state.get_window_size();
-        painter.paint_primitives(size.into(), pixels_per_point, clipped_primitives);
 
-        for id in textures_delta.free.drain(..) {
-            painter.free_texture(id);
-        }
+        (textures_delta, shapes)
     }
-}
-
-#[cfg(any(feature = "glow-backend", feature = "canvas-backend"))]
-trait PainterTrait {
-    fn paint_primitives(
-        &mut self,
-        screen_size_px: [u32; 2],
-        pixels_per_point: f32,
-        clipped_primitives: Vec<egui::ClippedPrimitive>,
-    );
-    fn set_texture(&mut self, tex_id: egui::TextureId, delta: &egui::epaint::ImageDelta);
-    fn free_texture(&mut self, tex_id: egui::TextureId);
 }

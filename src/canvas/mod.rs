@@ -22,7 +22,7 @@ pub use painter::*;
 
 /// Integration between [`egui`] and [`sdl2::render::Canvas`] for app based on [`sdl2`].
 pub struct EguiCanvas {
-    backend: crate::EguiBackend,
+    run_output: crate::EguiRunOutput,
     pub ctx: egui::Context,
     pub state: crate::State,
     pub painter: Painter,
@@ -32,48 +32,38 @@ impl EguiCanvas {
     pub fn new(window: sdl2::video::Window) -> Self {
         let ctx = egui::Context::default();
         let state = crate::State::new(&window, ctx.clone(), egui::ViewportId::ROOT);
-        let backend = crate::EguiBackend::new(ctx.clone());
+        let run_output = crate::EguiRunOutput::default();
         let painter = Painter::new(window);
 
         Self {
             ctx,
             painter,
             state,
-            backend,
+            run_output,
         }
     }
 
     /// Call [`Self::paint`] later to paint.
     pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) {
-        self.backend.run(&mut self.state, run_ui);
+        self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }
 
     /// Paint the results of the last call to [`Self::run`].
     pub fn paint(&mut self) {
-        self.backend.paint(&self.state, &mut self.painter);
+        let pixels_per_point = self.run_output.pixels_per_point;
+        let (textures_delta, shapes) = self.run_output.take();
+        let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
+        if let Err(e) = self.painter.paint_and_update_textures(
+            pixels_per_point,
+            &textures_delta,
+            clipped_primitives,
+        ) {
+            log::error!("Failed to paint: {e}");
+        }
     }
 
     /// Call to release the allocated graphics resources.
     pub fn destroy(&mut self) {
         self.painter.destroy();
-    }
-}
-
-impl crate::PainterTrait for Painter {
-    fn paint_primitives(
-        &mut self,
-        _screen_size_px: [u32; 2],
-        pixels_per_point: f32,
-        clipped_primitives: Vec<egui::ClippedPrimitive>,
-    ) {
-        self.paint_primitives(pixels_per_point, clipped_primitives);
-    }
-
-    fn set_texture(&mut self, tex_id: egui::TextureId, delta: &egui::epaint::ImageDelta) {
-        self.set_texture(tex_id, delta);
-    }
-
-    fn free_texture(&mut self, tex_id: egui::TextureId) {
-        self.free_texture(&tex_id);
     }
 }

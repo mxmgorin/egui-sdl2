@@ -20,7 +20,7 @@ pub use painter::*;
 
 /// Integration between [`egui`] and [`wgpu`](https://docs.rs/wgpu) for app based on [`sdl2`].
 pub struct EguiWgpu {
-    backend: crate::EguiBackend,
+    run_output: crate::EguiRunOutput,
     viewport_id: egui::ViewportId,
     pub ctx: egui::Context,
     pub state: crate::State,
@@ -33,7 +33,7 @@ impl EguiWgpu {
         let ctx = egui::Context::default();
         let viewport_id = egui::ViewportId::ROOT;
         let state = crate::State::new(&window, ctx.clone(), viewport_id);
-        let backend = crate::EguiBackend::new(ctx.clone());
+        let run_output = crate::EguiRunOutput::default();
         let config = egui_wgpu::WgpuConfiguration::default();
         let mut painter = painter::Painter::new(ctx.clone(), config, 1, None, true, false).await;
         // SAFETY:
@@ -47,7 +47,7 @@ impl EguiWgpu {
             ctx,
             painter,
             state,
-            backend,
+            run_output,
             viewport_id,
         }
     }
@@ -73,14 +73,13 @@ impl EguiWgpu {
 
     /// Call [`Self::paint`] later to paint.
     pub fn run(&mut self, run_ui: impl FnMut(&egui::Context)) {
-        self.backend.run(&mut self.state, run_ui);
+        self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }
 
     /// Paint the results of the last call to [`Self::run`].
     pub fn paint(&mut self, clear_color: [f32; 4]) {
-        let textures_delta = std::mem::take(&mut self.backend.textures_delta);
-        let pixels_per_point = self.backend.pixels_per_point;
-        let shapes = std::mem::take(&mut self.backend.shapes);
+        let pixels_per_point = self.run_output.pixels_per_point;
+        let (textures_delta, shapes) = self.run_output.take();
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
         self.painter.paint_and_update_textures(
             self.viewport_id,
