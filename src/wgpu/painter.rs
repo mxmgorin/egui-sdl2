@@ -87,35 +87,6 @@ impl Painter {
         self.render_state.clone()
     }
 
-    fn configure_surface(
-        surface_state: &SurfaceState,
-        render_state: &RenderState,
-        config: &WgpuConfiguration,
-    ) {
-        let width = surface_state.width;
-        let height = surface_state.height;
-
-        let mut surf_config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format: render_state.target_format,
-            present_mode: config.present_mode,
-            alpha_mode: surface_state.alpha_mode,
-            view_formats: vec![render_state.target_format],
-            ..surface_state
-                .surface
-                .get_default_config(&render_state.adapter, width, height)
-                .expect("The surface isn't supported by this adapter")
-        };
-
-        if let Some(desired_maximum_frame_latency) = config.desired_maximum_frame_latency {
-            surf_config.desired_maximum_frame_latency = desired_maximum_frame_latency;
-        }
-
-        surface_state
-            .surface
-            .configure(&render_state.device, &surf_config);
-    }
-
     /// Updates the [`sdl2::video::Window`] associated with the [`Painter`] without taking ownership of the window.
     ///
     /// # Safety
@@ -223,7 +194,7 @@ impl Painter {
         surface_state.width = width;
         surface_state.height = height;
 
-        Self::configure_surface(surface_state, render_state, &self.configuration);
+        configure_surface(surface_state, render_state, &self.configuration);
 
         if let Some(depth_format) = self.depth_format {
             self.depth_texture_view.insert(
@@ -365,7 +336,7 @@ impl Painter {
             Ok(frame) => frame,
             Err(err) => match (*self.configuration.on_surface_error)(err) {
                 SurfaceErrorAction::RecreateSurface => {
-                    Self::configure_surface(surface_state, render_state, &self.configuration);
+                    configure_surface(surface_state, render_state, &self.configuration);
                     return vsync_sec;
                 }
                 SurfaceErrorAction::SkipFrame => {
@@ -505,4 +476,33 @@ impl Painter {
             }
         }
     }
+}
+
+fn configure_surface(
+    surface_state: &SurfaceState,
+    render_state: &RenderState,
+    config: &WgpuConfiguration,
+) {
+    let width = surface_state.width;
+    let height = surface_state.height;
+
+    let mut surf_config = SurfaceConfiguration {
+        usage: TextureUsages::RENDER_ATTACHMENT,
+        format: render_state.target_format,
+        present_mode: config.present_mode,
+        alpha_mode: surface_state.alpha_mode,
+        view_formats: vec![render_state.target_format],
+        ..surface_state
+            .surface
+            .get_default_config(&render_state.adapter, width, height)
+            .expect("The surface isn't supported by this adapter")
+    };
+
+    if let Some(desired_maximum_frame_latency) = config.desired_maximum_frame_latency {
+        surf_config.desired_maximum_frame_latency = desired_maximum_frame_latency;
+    }
+
+    surface_state
+        .surface
+        .configure(&render_state.device, &surf_config);
 }
