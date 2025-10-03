@@ -13,7 +13,7 @@
 //! # Usage
 //! Typical usage is to:
 //! 1. Create an [`EguiCanvas`] for your SDL2 window and canvas
-//! 2. Pass SDL2 events to [`crate::State::on_event`]
+//! 2. Pass SDL2 events to [`EguiCanvas::on_event`]
 //! 3. Call [`EguiCanvas::run`] providing our UI function
 //! 4. Paint egui output via [`EguiCanvas::paint`]
 //!
@@ -41,6 +41,10 @@ impl EguiCanvas {
             state,
             run_output,
         }
+    }
+
+    pub fn on_event(&mut self, event: &sdl2::event::Event) -> crate::EventResponse {
+        self.state.on_event(self.painter.canvas.window(), event)
     }
 
     /// Call [`Self::paint`] later to paint.

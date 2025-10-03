@@ -52,10 +52,7 @@ impl App {
     }
 
     pub fn handle_event(&mut self, event: &Event) {
-        let resp = self
-            .egui
-            .state
-            .on_event(self.egui.painter.canvas.window(), event);
+        let resp = self.egui.on_event(event);
 
         if !resp.consumed {
             if let Event::Window {

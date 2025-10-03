@@ -3,7 +3,7 @@
 //! This module provides [`EguiGlow`], a convenience wrapper that bundles
 //! together:
 //! - [`egui::Context`] for running your UI
-//! - [`State`] for event/input handling
+//! - [`crate::State`] for event/input handling
 //! - [`egui_glow::Painter`] for rendering with OpenGL (via [`glow`])
 //!
 //! # When to use
@@ -14,7 +14,7 @@
 //! # Usage
 //! Typical usage is to:
 //! 1. Create an [`EguiGlow`] for your SDL2 window and GL context
-//! 2. Pass SDL2 events to [`State::on_event`]
+//! 2. Pass SDL2 events to [`crate::State::on_event`]
 //! 3. Call [`egui::Context::run`] providing your UI fuction
 //! 4. Paint egui output via [`EguiGlow::paint`]
 //!
