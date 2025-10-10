@@ -17,13 +17,18 @@
 //! let window = video.window("Egui SDL2 Canvas", 800, 600).build().unwrap();
 //! // Create egui renderer:
 //! let mut egui = egui_sdl2::EguiCanvas::new(window);
-//! // Feed SDL2 events into egui:
 //! let mut event_pump = sdl.event_pump().unwrap();
-//! let event = event_pump.wait_event();
-//! egui.on_event(&event);
-//! // Call `run` + `paint` each frame:
-//! egui.run(|ctx: &egui::Context| {});
-//! egui.paint();
+//! loop {
+//!    // Feed SDL2 events into egui:
+//!    for event in event_pump.poll_iter() {
+//!        app.handle_event(&event);
+//!    }
+//!    // Call `run` + `paint` each frame:
+//!    egui.run(|ctx: &egui::Context| {});
+//!    egui.paint();
+//!    egui.present();
+//!    std::thread::sleep(std::time::Duration::from_secs_f64(1.0 / 60.0));
+//!}
 //! ```
 
 pub use egui;
