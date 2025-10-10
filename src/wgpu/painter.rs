@@ -4,7 +4,7 @@ use egui_wgpu::wgpu::{CompositeAlphaMode, TextureFormat};
 use egui_wgpu::wgpu::{
     Surface, SurfaceConfiguration, SurfaceTargetUnsafe, TextureUsages, TextureViewDescriptor,
 };
-use egui_wgpu::{RenderState, SurfaceErrorAction, WgpuConfiguration, WgpuError};
+use egui_wgpu::{RenderState, RendererOptions, SurfaceErrorAction, WgpuConfiguration, WgpuError};
 use std::{num::NonZeroU32, sync::Arc};
 
 struct SurfaceState {
@@ -20,7 +20,6 @@ pub struct Painter {
     configuration: WgpuConfiguration,
     msaa_samples: u32,
     support_transparent_backbuffer: bool,
-    dithering: bool,
     depth_format: Option<TextureFormat>,
     screen_capture_state: Option<CaptureState>,
 
@@ -33,6 +32,7 @@ pub struct Painter {
     surfaces: egui::ViewportIdMap<SurfaceState>,
     capture_tx: egui_wgpu::capture::CaptureSender,
     capture_rx: egui_wgpu::capture::CaptureReceiver,
+    options: egui_wgpu::RendererOptions,
 }
 
 impl Painter {
@@ -64,7 +64,6 @@ impl Painter {
             configuration,
             msaa_samples,
             support_transparent_backbuffer,
-            dithering,
             depth_format,
             screen_capture_state: None,
 
@@ -77,6 +76,12 @@ impl Painter {
 
             capture_tx,
             capture_rx,
+            options: RendererOptions {
+                msaa_samples,
+                depth_stencil_format: depth_format,
+                dithering,
+                predictable_texture_filtering: true,
+            },
         }
     }
 
@@ -121,9 +126,7 @@ impl Painter {
                 &self.configuration,
                 &self.instance,
                 Some(&surface),
-                self.depth_format,
-                self.msaa_samples,
-                self.dithering,
+                self.options,
             )
             .await?;
             self.render_state.get_or_insert(render_state)
@@ -382,6 +385,7 @@ impl Painter {
                         }),
                         store: egui_wgpu::wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: self.depth_texture_view.get(&viewport_id).map(|view| {
                     egui_wgpu::wgpu::RenderPassDepthStencilAttachment {
