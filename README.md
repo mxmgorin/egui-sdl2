@@ -30,7 +30,7 @@ let mut event_pump = sdl.event_pump().unwrap();
 loop {
     // Feed SDL2 events into egui:
     for event in event_pump.poll_iter() {
-        app.handle_event(&event);
+        egui.on_event(&event);
     }
     // Call `run` + `paint` each frame:
     egui.run(|ctx: &egui::Context| {});
