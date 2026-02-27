@@ -1,4 +1,4 @@
-![Downloads](https://img.shields.io/crates/d/egui-sdl2)
+[![Downloads](https://img.shields.io/crates/d/egui-sdl2)](https://crates.io/crates/egui-sdl2)
 [![CI](https://github.com/mxmgorin/egui-sdl2/actions/workflows/ci.yml/badge.svg)](https://github.com/mxmgorin/egui-sdl2/actions)
 [![Dependencies](https://deps.rs/repo/github/mxmgorin/egui-sdl2/status.svg)](https://deps.rs/repo/github/mxmgorin/egui-sdl2)
 [![crates.io](https://img.shields.io/crates/v/egui-sdl2.svg)](https://crates.io/crates/egui-sdl2)
