@@ -40,7 +40,7 @@ impl UiExample {
             ui.separator();
 
             if ui.button("Quit?").clicked() {
-                self.quit = false;
+                self.quit = true;
             }
         });
     }
