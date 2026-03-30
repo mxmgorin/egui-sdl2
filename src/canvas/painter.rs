@@ -98,6 +98,16 @@ impl Painter {
         let w = img.width() as u32;
         let h = img.height() as u32;
         let pitch = (w as usize) * BYTES_PER_PIXEL;
+
+        if delta.pos.is_none() {
+            if let Some(tex) = self.textures.get(&id) {
+                let q = tex.query();
+                if q.width != w || q.height != h {
+                    self.free_texture(&id);
+                }
+            }
+        }
+
         let tex = self
             .textures
             .entry(id)
