@@ -14,9 +14,31 @@
 //! 4. Paint egui output via [`EguiWgpu::paint`]
 //!
 
+use egui_wgpu::wgpu::rwh::{DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle};
 use std::num::NonZeroU32;
 pub mod painter;
 pub use painter::*;
+
+/// An owned, `'static` clone of an SDL2 window's display handle.
+///
+/// Since wgpu 29 / egui-wgpu 0.34 the wgpu instance must be created with a display handle
+/// on some platforms (e.g. Wayland on Linux), otherwise surface creation fails with
+/// `MissingDisplayHandle`. [`egui_wgpu::WgpuSetup::from_display_handle`] requires an owned
+/// `Send + Sync + 'static` handle, which the borrowed `DisplayHandle<'_>` from SDL2 is not.
+#[derive(Clone, Copy, Debug)]
+struct SdlDisplayHandle(RawDisplayHandle);
+
+// SAFETY: a `RawDisplayHandle` is a plain pointer/id into the SDL2 video subsystem, which
+// stays alive for as long as the window we render to. We never mutate through it.
+unsafe impl Send for SdlDisplayHandle {}
+unsafe impl Sync for SdlDisplayHandle {}
+
+impl HasDisplayHandle for SdlDisplayHandle {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        // SAFETY: see the `Send`/`Sync` justification above.
+        Ok(unsafe { DisplayHandle::borrow_raw(self.0) })
+    }
+}
 
 /// Integration between [`egui`] and [`wgpu`](https://docs.rs/wgpu) for app based on [`sdl2`].
 pub struct EguiWgpu {
@@ -34,7 +56,16 @@ impl EguiWgpu {
         let viewport_id = egui::ViewportId::ROOT;
         let state = crate::State::new(&window, ctx.clone(), viewport_id);
         let run_output = crate::EguiRunOutput::default();
-        let config = egui_wgpu::WgpuConfiguration::default();
+        let raw_display_handle = window
+            .display_handle()
+            .expect("SDL2 window must expose a display handle")
+            .as_raw();
+        let config = egui_wgpu::WgpuConfiguration {
+            wgpu_setup: egui_wgpu::WgpuSetup::from_display_handle(SdlDisplayHandle(
+                raw_display_handle,
+            )),
+            ..Default::default()
+        };
         let mut painter = painter::Painter::new(ctx.clone(), config, 1, None, true, false).await;
         // SAFETY:
         // Window lives as long as self
