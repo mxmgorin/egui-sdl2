@@ -110,16 +110,20 @@ impl EguiRunOutput {
         &mut self,
         ctx: &egui::Context,
         state: &mut State,
-        run_ui: impl FnMut(&egui::Context),
+        mut run_ui: impl FnMut(&egui::Context),
     ) {
         let raw_input = state.take_egui_input();
+        // Our public API hands the caller an `&egui::Context`, so we drive egui through
+        // `run_ui` (which internally handles multi-pass layout) and bridge the root `Ui`
+        // back to its context. This keeps the `FnMut(&egui::Context)` closure contract
+        // while avoiding the deprecated `Context::run`.
         let egui::FullOutput {
             platform_output,
             viewport_output: _,
             textures_delta,
             shapes,
             pixels_per_point,
-        } = ctx.run(raw_input, run_ui);
+        } = ctx.run_ui(raw_input, |ui| run_ui(ui.ctx()));
         state.handle_platform_output(platform_output);
 
         self.shapes = shapes;
