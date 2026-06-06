@@ -336,8 +336,10 @@ impl Painter {
         };
 
         let output_frame = match output_frame {
-            Ok(frame) => frame,
-            Err(err) => match (*self.configuration.on_surface_error)(err) {
+            egui_wgpu::wgpu::CurrentSurfaceTexture::Success(frame) => frame,
+            // egui uses the suboptimal frame as-is and defers reconfiguration to the next frame.
+            egui_wgpu::wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            other => match (*self.configuration.on_surface_status)(&other) {
                 SurfaceErrorAction::RecreateSurface => {
                     configure_surface(surface_state, render_state, &self.configuration);
                     return vsync_sec;
@@ -401,6 +403,7 @@ impl Painter {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             // Forgetting the pass' lifetime means that we are no longer compile-time protected from
