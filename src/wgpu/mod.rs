@@ -109,6 +109,13 @@ impl EguiWgpu {
         self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }
 
+    /// How long until egui wants another frame, from the last [`Self::run`]
+    /// (see [`crate::EguiRunOutput::repaint_delay`]).
+    #[inline]
+    pub fn repaint_delay(&self) -> std::time::Duration {
+        self.run_output.repaint_delay
+    }
+
     /// Paint the results of the last call to [`Self::run`].
     pub fn paint(&mut self, clear_color: [f32; 4]) {
         let pixels_per_point = self.run_output.pixels_per_point;

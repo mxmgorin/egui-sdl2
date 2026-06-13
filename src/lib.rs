@@ -76,6 +76,17 @@ pub struct EguiRunOutput {
     ///
     /// Includes new textures to upload and old textures to free.
     pub textures_delta: egui::TexturesDelta,
+
+    /// How long until egui wants the ROOT viewport repainted, as reported by
+    /// the last [`Self::update`] (egui's `ViewportOutput::repaint_delay`).
+    ///
+    /// `Duration::ZERO` means egui needs another frame *immediately* — e.g. the
+    /// frame just run was a sizing pass for a freshly shown [`egui::Area`], whose
+    /// real (positioned, visible) frame must follow. `Duration::MAX` means egui
+    /// is idle and the backend may block on input. Event-driven backends should
+    /// fold this into their idle wait so animations and first-frame layout show
+    /// without an extra input event.
+    pub repaint_delay: std::time::Duration,
 }
 
 impl Default for EguiRunOutput {
@@ -86,6 +97,7 @@ impl Default for EguiRunOutput {
             shapes: Default::default(),
             pixels_per_point: 1.0,
             textures_delta: Default::default(),
+            repaint_delay: std::time::Duration::MAX,
         }
     }
 }
@@ -119,7 +131,7 @@ impl EguiRunOutput {
         // while avoiding the deprecated `Context::run`.
         let egui::FullOutput {
             platform_output,
-            viewport_output: _,
+            viewport_output,
             textures_delta,
             shapes,
             pixels_per_point,
@@ -129,6 +141,13 @@ impl EguiRunOutput {
         self.shapes = shapes;
         self.textures_delta.append(textures_delta);
         self.pixels_per_point = pixels_per_point;
+        // Surface egui's own repaint timing for the ROOT viewport so event-driven
+        // backends don't drop it: a sizing pass for a freshly shown anchored Area
+        // reports `ZERO` here, asking for the follow-up frame that actually paints
+        // it. `MAX` if egui didn't report (idle — wait on input).
+        self.repaint_delay = viewport_output
+            .get(&egui::ViewportId::ROOT)
+            .map_or(std::time::Duration::MAX, |v| v.repaint_delay);
     }
 
     /// Take ownership of the texture updates and shapes for the current frame.
