@@ -45,9 +45,18 @@ pub struct State {
     start_time: std::time::Instant,
     viewport_id: egui::ViewportId,
     pointer_pos_in_points: Option<egui::Pos2>,
+    /// The finger currently driving synthesized pointer events. The first finger
+    /// down becomes the pointer; extra fingers only feed multi-touch gestures so
+    /// they don't emit phantom clicks. Cleared on its up/cancel.
+    pointer_touch_id: Option<i64>,
     current_cursor: Option<CurrentCursor>,
     clipboard: sdl2::clipboard::ClipboardUtil,
     window_size: (u32, u32), // cache value and update on events
+    // Drawable size in pixels, cached and refreshed on resize. `take_egui_input`
+    // divides it by the *current* zoom each frame to rebuild `screen_rect`, so a
+    // `set_zoom_factor` after construction is reflected without waiting for a
+    // resize event (otherwise the UI lays out for the wrong rect until rotation).
+    drawable_size: (u32, u32),
 }
 
 /// Represents currently active cursor.
@@ -73,6 +82,7 @@ impl State {
             .native_pixels_per_point = Some(native_pixels_per_point(window));
         let clipboard = window.subsystem().clipboard();
         let window_size = window.size();
+        let drawable_size = window.drawable_size();
 
         State {
             egui_ctx,
@@ -81,8 +91,10 @@ impl State {
             start_time: std::time::Instant::now(),
             egui_input,
             pointer_pos_in_points: None,
+            pointer_touch_id: None,
             current_cursor: None,
             window_size,
+            drawable_size,
         }
     }
 
@@ -149,6 +161,26 @@ impl State {
         self.egui_input.time = Some(self.start_time.elapsed().as_secs_f64());
         // Tell egui which viewport is now active:
         self.egui_input.viewport_id = self.viewport_id;
+
+        // Rebuild `screen_rect` from the cached drawable size and the *current*
+        // zoom factor every frame. `screen_rect` is in points (pixels / ppp), and
+        // ppp depends on `zoom_factor`, which the embedder can change after `new`
+        // (e.g. a HiDPI `set_zoom_factor` on Android). Recomputing here keeps the
+        // layout rect correct without needing a resize event to trigger it.
+        let native_ppp = self
+            .egui_input
+            .viewports
+            .get(&self.viewport_id)
+            .and_then(|v| v.native_pixels_per_point)
+            .unwrap_or(1.0);
+        let ppp = self.egui_ctx.zoom_factor() * native_ppp;
+        if ppp > 0.0 {
+            let points = egui::vec2(self.drawable_size.0 as f32, self.drawable_size.1 as f32) / ppp;
+            if points.x > 0.0 && points.y > 0.0 {
+                self.egui_input.screen_rect =
+                    Some(egui::Rect::from_min_size(egui::Pos2::ZERO, points));
+            }
+        }
 
         self.egui_input.take()
     }
@@ -337,8 +369,14 @@ impl State {
             egui::TouchPhase::Move => self.egui_ctx.egui_is_using_pointer(),
         };
 
-        let pos = poiner_pos_in_points(&self.egui_ctx, window, info.x, info.y);
-        self.pointer_pos_in_points = Some(pos);
+        // SDL finger coordinates are normalized to the window (0.0..=1.0), unlike
+        // mouse events which arrive in window coordinates. Scale them to the
+        // window's pixel space so `poiner_pos_in_points` (which divides by ppp)
+        // yields the right egui position — otherwise every touch maps to ~(0,0).
+        let (win_w, win_h) = window.size();
+        let pixel_x = info.x * win_w as f32;
+        let pixel_y = info.y * win_h as f32;
+        let pos = poiner_pos_in_points(&self.egui_ctx, window, pixel_x, pixel_y);
         self.egui_input.events.push(egui::Event::Touch {
             device_id: egui::TouchDeviceId(info.touch_id as u64),
             id: egui::TouchId::from(info.finger_id as u64),
@@ -346,6 +384,49 @@ impl State {
             pos,
             force: Some(info.pressure),
         });
+
+        // egui's widget layer reacts to pointer events, not raw touch events, so
+        // synthesize a primary-button pointer stream from the first finger (the
+        // same thing egui-winit does). Without this, taps never click buttons on
+        // platforms where the windowing layer doesn't synthesize mouse events from
+        // touch (e.g. Android with SDL_TOUCH_MOUSE_EVENTS off). Extra fingers are
+        // left to the multi-touch event above so they don't emit phantom presses.
+        match info.phase {
+            egui::TouchPhase::Start if self.pointer_touch_id.is_none() => {
+                self.pointer_touch_id = Some(info.finger_id);
+                self.pointer_pos_in_points = Some(pos);
+                // Move to the press point first so egui has a current pointer pos.
+                self.egui_input.events.push(egui::Event::PointerMoved(pos));
+                self.egui_input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: self.egui_input.modifiers,
+                });
+            }
+            egui::TouchPhase::Move if self.pointer_touch_id == Some(info.finger_id) => {
+                self.pointer_pos_in_points = Some(pos);
+                self.egui_input.events.push(egui::Event::PointerMoved(pos));
+            }
+            egui::TouchPhase::End | egui::TouchPhase::Cancel
+                if self.pointer_touch_id == Some(info.finger_id) =>
+            {
+                self.pointer_touch_id = None;
+                if info.phase == egui::TouchPhase::End {
+                    self.egui_input.events.push(egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: self.egui_input.modifiers,
+                    });
+                }
+                // A touch pointer has no hover position once lifted; tell egui it's
+                // gone so the next press starts a fresh interaction.
+                self.egui_input.events.push(egui::Event::PointerGone);
+                self.pointer_pos_in_points = None;
+            }
+            _ => {}
+        }
 
         EventResponse {
             repaint: true,
@@ -464,9 +545,19 @@ impl State {
         }
     }
 
+    /// Refresh the cached window/drawable size and native pixels-per-point from
+    /// the live window. Call once per frame so an orientation change is reflected
+    /// even when the platform doesn't deliver a size-changed event (Android is
+    /// unreliable here — the surface can resize on rotation without an event).
+    #[inline]
+    pub fn sync_window_size(&mut self, window: &Window) {
+        self.on_size_chage(window);
+    }
+
     #[inline]
     fn on_size_chage(&mut self, window: &Window) {
         self.window_size = window.size();
+        self.drawable_size = window.drawable_size();
         self.egui_input.screen_rect = new_screen_rect(&self.egui_ctx, window);
         self.egui_input
             .viewports
