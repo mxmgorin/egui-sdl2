@@ -1,16 +1,17 @@
 [package]
 name = "egui-sdl2"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
-authors = ["troidem <mxmgorin@gmail.com>"]
-description = "egui + SDL2: event handling and rendering via OpenGL, Canvas, WebGPU"
+rust-version = "1.92"
+description = "egui integration for SDL2: event handling and software, OpenGL, or wgpu rendering"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mxmgorin/egui-sdl2"
 homepage = "https://github.com/mxmgorin/egui-sdl2"
-keywords = ["sdl2", "egui", "gui", "gamedev"]
-categories = ["gui"]
-include = ["../LICENSE-APACHE", "../LICENSE-MIT", "**/*.rs", "Cargo.toml"]
+documentation = "https://docs.rs/egui-sdl2"
+keywords = ["sdl2", "egui", "gui", "gamedev", "opengl"]
+categories = ["gui", "rendering", "game-development"]
+include = ["LICENSE-APACHE", "LICENSE-MIT", "README.md", "CHANGELOG.md", "**/*.rs", "Cargo.toml"]
 
 [features]
 # `wgpu-backend` is opt-in: it pulls in wgpu + naga (~90 extra crates). The
@@ -72,3 +73,8 @@ required-features = ["glow-backend"]
 [[example]]
 name = "wgpu"
 required-features = ["wgpu-backend"]
+
+# Build docs on docs.rs with every rendering backend enabled; otherwise the
+# wgpu module (not in the default feature set) would be missing from the docs.
+[package.metadata.docs.rs]
+features = ["glow-backend", "canvas-backend", "wgpu-backend"]
