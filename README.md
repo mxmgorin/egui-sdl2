@@ -3,20 +3,33 @@
 [![Dependencies](https://deps.rs/repo/github/mxmgorin/egui-sdl2/status.svg)](https://deps.rs/repo/github/mxmgorin/egui-sdl2)
 [![crates.io](https://img.shields.io/crates/v/egui-sdl2.svg)](https://crates.io/crates/egui-sdl2)
 [![Downloads](https://img.shields.io/crates/d/egui-sdl2)](https://crates.io/crates/egui-sdl2)
-<!--![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Apache](https://img.shields.io/badge/license-Apache-blue.svg) -->
+[![License](https://img.shields.io/crates/l/egui-sdl2)](#license)
 
 # egui-sdl2
 
-This crate provides integration between [`egui`](https://github.com/emilk/egui) and [`sdl2`](https://github.com/Rust-SDL2/rust-sdl2), including event handling and multiple rendering backends with a consistent API. It supports optional rendering backends:
+**[egui](https://github.com/emilk/egui) on [SDL2](https://github.com/Rust-SDL2/rust-sdl2): SDL2 event handling plus three swappable rendering backends behind one consistent API.**
 
-- Software via [`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html) (`canvas-backend` feature)
-- OpengGL via [`glow`](https://crates.io/crates/glow) (`glow-backend` feature)
-- WebgGPU via [`wgpu`](https://github.com/gfx-rs/wgpu) (`wgpu-backend` feature)
+<p align="center"><img src="https://raw.githubusercontent.com/mxmgorin/egui-sdl2/main/assets/demo.gif" alt="egui-sdl2 demo" width="460"></p>
 
-The implementation is based on the design of the official egui-winit, egui_glow, egui-wgpu crates, aming to make it easy to use SDL2 with egui.
+## Why egui-sdl2?
 
-Both `egui` and `sdl2` are re-exported for convenience. The `sdl2` re-export includes all feature flags available to use.
+- **Three rendering backends, one API.** Software ([`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html)),
+  OpenGL ([`glow`](https://crates.io/crates/glow)), and WebGPU ([`wgpu`](https://github.com/gfx-rs/wgpu)) — pick one
+  with a feature flag and use the same `on_event` / `run` / `paint` loop for all of them.
+- **Tracks the latest egui.** Kept in step with current egui releases so you are not stuck on an old version.
+- **Built on the official design.** Mirrors the structure of the upstream `egui-winit`, `egui_glow`, and
+  `egui-wgpu` crates, so the API feels familiar and behaves predictably.
+- **Batteries included.** Translates SDL2 events into egui events and handles `egui::PlatformOutput`
+  (clipboard, cursor updates, opening links). Both `egui` and `sdl2` are re-exported for convenience, and
+  the `sdl2` re-export forwards all of SDL2's feature flags.
+
+## Rendering backends
+
+Enable exactly what you need via feature flags:
+
+- `canvas-backend` — software rendering via [`Canvas`](https://docs.rs/sdl2/latest/sdl2/render/struct.Canvas.html)
+- `glow-backend` — OpenGL via [`glow`](https://crates.io/crates/glow)
+- `wgpu-backend` — WebGPU via [`wgpu`](https://github.com/gfx-rs/wgpu)
 
 ## Usage
 
@@ -41,9 +54,19 @@ loop {
 }
 ```
 
-To get started, create an [`EguiGlow`](https://docs.rs/egui-sdl2/latest/egui_sdl2/glow/index.html) or [`EguiCanvas`](https://docs.rs/egui-sdl2/latest/egui_sdl2/canvas/index.html) or [`EguiWgpu`](https://docs.rs/egui-sdl2/latest/egui_sdl2/wgpu/index.html) instance to manage rendering. Pass SDL2 events to `on_event`, then call `run` and `paint` each frame. For event handling only, you can use the [`State`](https://docs.rs/egui-sdl2/latest/egui_sdl2/state/index.html) type.
-Examples are available in the [examples/](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/) directory. To run the `canvas` example:
+To get started, create an [`EguiGlow`](https://docs.rs/egui-sdl2/latest/egui_sdl2/glow/index.html),
+[`EguiCanvas`](https://docs.rs/egui-sdl2/latest/egui_sdl2/canvas/index.html), or
+[`EguiWgpu`](https://docs.rs/egui-sdl2/latest/egui_sdl2/wgpu/index.html) instance to manage rendering.
+Pass SDL2 events to `on_event`, then call `run` and `paint` each frame. For event handling only, you can use
+the [`State`](https://docs.rs/egui-sdl2/latest/egui_sdl2/state/index.html) type.
+
+Examples are available in the [examples/](https://github.com/mxmgorin/egui-sdl2/tree/main/examples/)
+directory. To run the `canvas` example:
 
 ```sh
 cargo run --example canvas
 ```
+
+## License
+
+Licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.

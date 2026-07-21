@@ -15,7 +15,7 @@
 //! Typical usage is to:
 //! 1. Create an [`EguiGlow`] for your SDL2 window and GL context
 //! 2. Pass SDL2 events to [`crate::State::on_event`]
-//! 3. Call [`egui::Context::run`] providing your UI fuction
+//! 3. Call [`EguiGlow::run`] providing your UI function
 //! 4. Paint egui output via [`EguiGlow::paint`]
 //!
 

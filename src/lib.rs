@@ -6,8 +6,9 @@
 //! ## Features
 //! - Translate SDL2 events into [`egui`] events.
 //! - Handle [`egui::PlatformOutput`] (clipboard, cursor updates, links).
-//! - Render with OpenGL via [`glow`] (`glow-backend` feature).
 //! - Render with the SDL2 software renderer via [`sdl2::render::Canvas`] (`canvas-backend` feature).
+//! - Render with OpenGL via [`glow`] (`glow-backend` feature).
+//! - Render with WebGPU via [`wgpu`](https://github.com/gfx-rs/wgpu) (`wgpu-backend` feature).
 //!
 //! ## Usage
 //! ```no_run
