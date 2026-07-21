@@ -340,7 +340,10 @@ impl Painter {
             // egui uses the suboptimal frame as-is and defers reconfiguration to the next frame.
             egui_wgpu::wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
             other => match (*self.configuration.on_surface_status)(&other) {
-                SurfaceErrorAction::RecreateSurface => {
+                // `Reconfigure` reconfigures the existing surface; `RecreateSurface` asks for a
+                // fresh surface object. This painter only reconfigures in place, so both map to
+                // the same recovery path: reconfigure and skip the current frame.
+                SurfaceErrorAction::Reconfigure | SurfaceErrorAction::RecreateSurface => {
                     configure_surface(surface_state, render_state, &self.configuration);
                     return vsync_sec;
                 }
@@ -496,7 +499,7 @@ fn configure_surface(
     let mut surf_config = SurfaceConfiguration {
         usage: TextureUsages::RENDER_ATTACHMENT,
         format: render_state.target_format,
-        present_mode: config.present_mode,
+        present_mode: config.surface.present_mode,
         alpha_mode: surface_state.alpha_mode,
         view_formats: vec![render_state.target_format],
         ..surface_state
@@ -505,7 +508,7 @@ fn configure_surface(
             .expect("The surface isn't supported by this adapter")
     };
 
-    if let Some(desired_maximum_frame_latency) = config.desired_maximum_frame_latency {
+    if let Some(desired_maximum_frame_latency) = config.surface.desired_maximum_frame_latency {
         surf_config.desired_maximum_frame_latency = desired_maximum_frame_latency;
     }
 

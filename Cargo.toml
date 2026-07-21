@@ -41,22 +41,22 @@ sdl2-use_ios_framework = ["sdl2/use_ios_framework"]
 sdl2-bundled = ["sdl2/bundled"]
 
 [dependencies]
-log = "0.4.32"
+log = "0.4.33"
 sdl2 = { version = "0.38.0", default-features = false }
-egui = "0.34.3"
+egui = "0.35.0"
 webbrowser = { version = "1.2.1", optional = true }
 # glow-backend:
 glow = { version = "0.17.0", optional = true }
-egui_glow = { version = "0.34.3", optional = true }
+egui_glow = { version = "0.35.0", optional = true }
 # canvas-backend:
 sdl2-sys = {version = "0.38", optional = true }
-bytemuck = { version = "1.23.2", optional = true }
+bytemuck = { version = "1.25.2", optional = true }
 # wgpu-backend:
-egui-wgpu = { version = "0.34.3", optional = true }
+egui-wgpu = { version = "0.35.0", optional = true }
 web-time = { version = "1.1.0", optional = true }
 
 [dev-dependencies]
-pollster = { version = "0.4.0" }
+pollster = { version = "1.0.1" }
 
 # Each example needs its backend feature. Without these, `cargo build
 # --examples` fails on the wgpu example now that it isn't in the default set;
