@@ -41,7 +41,7 @@ impl UiExample {
 
                 if ui.button("Greet").clicked() {
                     self.multiline_text = "Hello, world!".to_string();
-                    println!("{}", &self.multiline_text);
+                    println!("{}", self.multiline_text);
                 }
 
                 ui.text_edit_multiline(&mut self.multiline_text);
