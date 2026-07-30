@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-30
+
+### Changed
+
+- **Breaking:** the canvas backend no longer takes ownership of the window or
+  canvas. `EguiCanvas::new` and `Painter::new` take `&Canvas<Window>`, and
+  `EguiCanvas::on_event`/`paint` (plus `Painter::paint_and_update_textures` and
+  `paint_primitives`) take the canvas per call. Applications that already own a
+  canvas — games, emulators, anything drawing its own frame — can now paint egui
+  on top of it instead of restructuring around the painter's canvas.
+- **Breaking:** removed `EguiCanvas::clear`/`present` and `Painter::canvas`; call
+  `clear`/`present` on your own canvas instead.
+
+### Added
+
+- `EguiGlow::on_event`, mirroring `EguiCanvas::on_event`, so the glow backend
+  doesn't have to reach through `EguiGlow::state`.
+
 ## [0.5.0] - 2026-07-21
 
 ### Changed
@@ -52,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.3.2...v0.4.0
