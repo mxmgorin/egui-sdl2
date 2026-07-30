@@ -14,7 +14,7 @@
 //! # Usage
 //! Typical usage is to:
 //! 1. Create an [`EguiGlow`] for your SDL2 window and GL context
-//! 2. Pass SDL2 events to [`crate::State::on_event`]
+//! 2. Pass SDL2 events to [`EguiGlow::on_event`]
 //! 3. Call [`EguiGlow::run`] providing your UI function
 //! 4. Paint egui output via [`EguiGlow::paint`]
 //!
@@ -50,6 +50,15 @@ impl EguiGlow {
             state,
             ctx,
         }
+    }
+
+    #[inline]
+    pub fn on_event(
+        &mut self,
+        window: &sdl2::video::Window,
+        event: &sdl2::event::Event,
+    ) -> crate::EventResponse {
+        self.state.on_event(window, event)
     }
 
     /// Call [`Self::paint`] later to paint.

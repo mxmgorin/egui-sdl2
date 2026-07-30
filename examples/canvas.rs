@@ -1,5 +1,8 @@
 use crate::common::UiExample;
 use sdl2::event::{Event, WindowEvent};
+use sdl2::pixels::Color;
+use sdl2::render::Canvas;
+use sdl2::video::Window;
 use std::time::Duration;
 mod common;
 
@@ -22,6 +25,7 @@ fn main() {
 }
 
 struct App {
+    canvas: Canvas<Window>,
     egui: egui_sdl2::EguiCanvas,
     ui: UiExample,
 }
@@ -34,9 +38,11 @@ impl App {
             .resizable()
             .build()
             .unwrap();
-        let egui = egui_sdl2::EguiCanvas::new(window);
+        let canvas = window.into_canvas().build().unwrap();
+        let egui = egui_sdl2::EguiCanvas::new(&canvas);
 
         Self {
+            canvas,
             egui,
             ui: UiExample::default(),
         }
@@ -47,7 +53,7 @@ impl App {
     }
 
     pub fn handle_event(&mut self, event: &Event) {
-        let resp = self.egui.on_event(event);
+        let resp = self.egui.on_event(&self.canvas, event);
 
         if !resp.consumed {
             if let Event::Window {
@@ -62,17 +68,15 @@ impl App {
 
     pub fn update(&mut self) {
         self.egui.run(|ctx| self.ui.update(ctx));
-        self.egui.clear(f32_to_u8_color(self.ui.color));
-        self.egui.paint();
-        self.egui.present();
+        self.canvas.set_draw_color(to_sdl_color(self.ui.color));
+        self.canvas.clear();
+        self.egui.paint(&mut self.canvas);
+        self.canvas.present();
     }
 }
 
-fn f32_to_u8_color(c: [f32; 4]) -> [u8; 4] {
-    [
-        (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c[2].clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c[3].clamp(0.0, 1.0) * 255.0).round() as u8,
-    ]
+fn to_sdl_color(c: [f32; 4]) -> Color {
+    let ch = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+
+    Color::RGBA(ch(c[0]), ch(c[1]), ch(c[2]), ch(c[3]))
 }

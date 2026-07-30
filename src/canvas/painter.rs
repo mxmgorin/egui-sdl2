@@ -22,8 +22,9 @@ const BYTES_PER_PIXEL: usize = 4;
 
 /// An Canvas painter using [`sdl2`].
 ///
-/// This is responsible for painting egui and managing egui textures.
-/// You can access the underlying [`sdl2::video::Window`] with [`Self::canvas`].
+/// This is responsible for painting egui and managing egui textures. The
+/// [`Canvas`] stays owned by the caller and is passed in per paint call, so egui
+/// can draw over content the application already rendered.
 ///
 /// This struct must be destroyed with [`Painter::destroy`] before dropping, to ensure
 /// objects have been properly deleted and are not leaked.
@@ -37,22 +38,18 @@ pub struct Painter {
     vertex_scratch: Vec<SDL_Vertex>,
     /// Clip rect currently applied to the canvas within a `paint_primitives`
     /// run, so meshes sharing a clip skip a redundant `SDL_RenderSetClipRect`.
-    /// Reset to `None` at the start of each run because the `pub canvas` may be
-    /// mutated externally between runs.
+    /// Reset to `None` at the start of each run because the caller draws to the
+    /// same canvas between runs.
     last_clip: Option<Rect>,
-
-    pub canvas: Canvas<Window>,
 }
 
 impl Painter {
-    pub fn new(window: sdl2::video::Window) -> Self {
-        let canvas: Canvas<Window> = window.into_canvas().build().unwrap();
-        let texture_creator = canvas.texture_creator();
-
+    /// Textures are created from `canvas`'s renderer, so pass the same canvas to
+    /// the paint calls.
+    pub fn new(canvas: &Canvas<Window>) -> Self {
         Self {
             textures: HashMap::new(),
-            canvas,
-            texture_creator,
+            texture_creator: canvas.texture_creator(),
             vertex_scratch: Vec::new(),
             last_clip: None,
         }
@@ -72,6 +69,7 @@ impl Painter {
     /// You are expected to have cleared the color buffer before calling this.
     pub fn paint_and_update_textures(
         &mut self,
+        canvas: &mut Canvas<Window>,
         pixels_per_point: f32,
         textures_delta: &TexturesDelta,
         paint_jobs: Vec<ClippedPrimitive>,
@@ -80,7 +78,7 @@ impl Painter {
             self.set_texture(*id, delta);
         }
 
-        self.paint_primitives(pixels_per_point, paint_jobs);
+        self.paint_primitives(canvas, pixels_per_point, paint_jobs);
 
         for &id in &textures_delta.free {
             self.free_texture(&id);
@@ -90,26 +88,32 @@ impl Painter {
     }
 
     /// Main entry-point for painting a frame.
-    pub fn paint_primitives(&mut self, pixels_per_point: f32, paint_jobs: Vec<ClippedPrimitive>) {
-        // The `pub canvas` may have been drawn to (and its clip changed) since
+    pub fn paint_primitives(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        pixels_per_point: f32,
+        paint_jobs: Vec<ClippedPrimitive>,
+    ) {
+        // The caller may have drawn to the canvas (and changed its clip) since
         // the last run, so don't assume any clip is still applied.
         self.last_clip = None;
         for job in paint_jobs.into_iter() {
             match job.primitive {
-                Primitive::Mesh(mesh) => self.paint_mesh(pixels_per_point, job.clip_rect, mesh),
+                Primitive::Mesh(mesh) => {
+                    self.paint_mesh(canvas, pixels_per_point, job.clip_rect, mesh)
+                }
                 Primitive::Callback(_callback) => {
                     // TODO
                     log::warn!("PaintCallbacks are not supported")
                 }
             }
         }
-        // Clear the clip once, after all meshes, so content the caller draws on
-        // the `pub canvas` after `paint()` isn't clipped to the last mesh's rect.
-        // Guard on `last_clip`: a frame that drew no meshes never set a clip, so
-        // leave the caller's own clip untouched — exact parity with the old code,
-        // which only ever touched the clip from inside `paint_mesh`.
+        // Clear the clip once, after all meshes, so content the caller draws
+        // after `paint()` isn't clipped to the last mesh's rect. Guard on
+        // `last_clip`: a frame that drew no meshes never set a clip, so leave
+        // the caller's own clip untouched.
         if self.last_clip.is_some() {
-            self.canvas.set_clip_rect(None);
+            canvas.set_clip_rect(None);
         }
     }
 
@@ -147,7 +151,13 @@ impl Painter {
     }
 
     #[inline]
-    fn paint_mesh(&mut self, pixels_per_point: f32, clip_rect: egui::Rect, mesh: egui::Mesh) {
+    fn paint_mesh(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        pixels_per_point: f32,
+        clip_rect: egui::Rect,
+        mesh: egui::Mesh,
+    ) {
         let texture_ptr = self
             .textures
             .get(&mesh.texture_id)
@@ -165,7 +175,7 @@ impl Painter {
         // Adjacent meshes (e.g. all glyphs in one panel) usually share a clip;
         // only hit `SDL_RenderSetClipRect` when it actually changes.
         if self.last_clip != Some(clip_rect) {
-            self.canvas.set_clip_rect(clip_rect);
+            canvas.set_clip_rect(clip_rect);
             self.last_clip = Some(clip_rect);
         }
 
@@ -187,7 +197,7 @@ impl Painter {
 
         let result = unsafe {
             sdl2_sys::SDL_RenderGeometry(
-                self.canvas.raw(),
+                canvas.raw(),
                 texture_ptr,
                 if verts_len == 0 {
                     std::ptr::null()

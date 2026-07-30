@@ -11,14 +11,18 @@
 //! instead of OpenGL.
 //!
 //! # Usage
-//! Typical usage is to:
-//! 1. Create an [`EguiCanvas`] for your SDL2 window and canvas
+//! The [`Canvas`] stays owned by you: build it however you like, then pass it to
+//! the calls that need it. Typical usage is to:
+//! 1. Create an [`EguiCanvas`] for your SDL2 canvas
 //! 2. Pass SDL2 events to [`EguiCanvas::on_event`]
 //! 3. Call [`EguiCanvas::run`] providing our UI function
-//! 4. Paint egui output via [`EguiCanvas::paint`]
+//! 4. Paint egui output over whatever you drew via [`EguiCanvas::paint`]
 //!
 pub mod painter;
 pub use painter::*;
+
+use sdl2::render::Canvas;
+use sdl2::video::Window;
 
 /// Integration between [`egui`] and [`sdl2::render::Canvas`] for app based on [`sdl2`].
 pub struct EguiCanvas {
@@ -29,11 +33,12 @@ pub struct EguiCanvas {
 }
 
 impl EguiCanvas {
-    pub fn new(window: sdl2::video::Window) -> Self {
+    /// Pass the same `canvas` to [`Self::on_event`] and [`Self::paint`].
+    pub fn new(canvas: &Canvas<Window>) -> Self {
         let ctx = egui::Context::default();
-        let state = crate::State::new(&window, ctx.clone(), egui::ViewportId::ROOT);
+        let state = crate::State::new(canvas.window(), ctx.clone(), egui::ViewportId::ROOT);
         let run_output = crate::EguiRunOutput::default();
-        let painter = Painter::new(window);
+        let painter = Painter::new(canvas);
 
         Self {
             ctx,
@@ -44,8 +49,12 @@ impl EguiCanvas {
     }
 
     #[inline]
-    pub fn on_event(&mut self, event: &sdl2::event::Event) -> crate::EventResponse {
-        self.state.on_event(self.painter.canvas.window(), event)
+    pub fn on_event(
+        &mut self,
+        canvas: &Canvas<Window>,
+        event: &sdl2::event::Event,
+    ) -> crate::EventResponse {
+        self.state.on_event(canvas.window(), event)
     }
 
     /// Call [`Self::paint`] later to paint.
@@ -61,30 +70,20 @@ impl EguiCanvas {
         self.run_output.repaint_delay
     }
 
-    /// Paint the results of the last call to [`Self::run`].
-    pub fn paint(&mut self) {
+    /// Paint the results of the last call to [`Self::run`]. Clear the canvas (and
+    /// draw your own content) beforehand; present it afterwards.
+    pub fn paint(&mut self, canvas: &mut Canvas<Window>) {
         let pixels_per_point = self.run_output.pixels_per_point;
         let (textures_delta, shapes) = self.run_output.take();
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
         if let Err(e) = self.painter.paint_and_update_textures(
+            canvas,
             pixels_per_point,
             &textures_delta,
             clipped_primitives,
         ) {
             log::error!("Failed to paint: {e}");
         }
-    }
-
-    #[inline]
-    pub fn clear(&mut self, color: [u8; 4]) {
-        let color = sdl2::pixels::Color::RGBA(color[0], color[1], color[2], color[3]);
-        self.painter.canvas.set_draw_color(color);
-        self.painter.canvas.clear();
-    }
-
-    #[inline]
-    pub fn present(&mut self) {
-        self.painter.canvas.present();
     }
 
     /// Call to release the allocated graphics resources.
