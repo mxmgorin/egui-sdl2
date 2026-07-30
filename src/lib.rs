@@ -12,22 +12,24 @@
 //!
 //! ## Usage
 //! ```no_run
-//! // Create SDL2 window:
+//! // Create SDL2 window and canvas:
 //! let sdl = sdl2::init().unwrap();
 //! let video = sdl.video().unwrap();
 //! let window = video.window("Egui SDL2 Canvas", 800, 600).build().unwrap();
-//! // Create egui renderer:
-//! let mut egui = egui_sdl2::EguiCanvas::new(window);
+//! let mut canvas = window.into_canvas().build().unwrap();
+//! // Create egui renderer; the canvas stays yours:
+//! let mut egui = egui_sdl2::EguiCanvas::new(&canvas);
 //! let mut event_pump = sdl.event_pump().unwrap();
 //! loop {
 //!    // Feed SDL2 events into egui:
 //!    for event in event_pump.poll_iter() {
-//!        egui.on_event(&event);
+//!        egui.on_event(&canvas, &event);
 //!    }
-//!    // Call `run` + `paint` each frame:
+//!    // Call `run` + `paint` each frame, over anything you drew yourself:
 //!    egui.run(|ctx: &egui::Context| {});
-//!    egui.paint();
-//!    egui.present();
+//!    canvas.clear();
+//!    egui.paint(&mut canvas);
+//!    canvas.present();
 //!    std::thread::sleep(std::time::Duration::from_secs_f64(1.0 / 60.0));
 //!}
 //! ```
