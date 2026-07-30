@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-30
+
+### Added
+
+- `EguiGlow::run_ui`, `EguiCanvas::run_ui`, `EguiWgpu::run_ui` and
+  `EguiRunOutput::update_ui`, which hand the closure egui's root `Ui` instead of
+  the `Context`. As of egui 0.35 panels (`CentralPanel`, `TopBottomPanel`, …) are
+  shown into a `Ui`, so a full-screen layout was not expressible through `run`.
+
 ## [0.6.0] - 2026-07-30
 
 ### Changed
@@ -70,7 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.3.2...v0.4.0
