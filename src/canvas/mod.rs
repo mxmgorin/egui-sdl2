@@ -63,6 +63,14 @@ impl EguiCanvas {
         self.run_output.update(&self.ctx, &mut self.state, run_ui);
     }
 
+    /// Like [`Self::run`], but hands the closure egui's root [`egui::Ui`], which
+    /// is what panels are shown into.
+    #[inline]
+    pub fn run_ui(&mut self, run_ui: impl FnMut(&mut egui::Ui)) {
+        self.run_output
+            .update_ui(&self.ctx, &mut self.state, run_ui);
+    }
+
     /// How long until egui wants another frame, from the last [`Self::run`]
     /// (see [`crate::EguiRunOutput::repaint_delay`]).
     #[inline]

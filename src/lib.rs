@@ -127,18 +127,28 @@ impl EguiRunOutput {
         state: &mut State,
         mut run_ui: impl FnMut(&egui::Context),
     ) {
+        self.update_ui(ctx, state, |ui| run_ui(ui.ctx()));
+    }
+
+    /// Like [`Self::update`], but hands the closure egui's root [`egui::Ui`].
+    ///
+    /// Panels ([`egui::CentralPanel`], [`egui::TopBottomPanel`], …) are shown into
+    /// a `Ui`, so a full-screen layout needs this rather than [`Self::update`].
+    #[inline]
+    pub fn update_ui(
+        &mut self,
+        ctx: &egui::Context,
+        state: &mut State,
+        run_ui: impl FnMut(&mut egui::Ui),
+    ) {
         let raw_input = state.take_egui_input();
-        // Our public API hands the caller an `&egui::Context`, so we drive egui through
-        // `run_ui` (which internally handles multi-pass layout) and bridge the root `Ui`
-        // back to its context. This keeps the `FnMut(&egui::Context)` closure contract
-        // while avoiding the deprecated `Context::run`.
         let egui::FullOutput {
             platform_output,
             viewport_output,
             textures_delta,
             shapes,
             pixels_per_point,
-        } = ctx.run_ui(raw_input, |ui| run_ui(ui.ctx()));
+        } = ctx.run_ui(raw_input, run_ui);
         state.handle_platform_output(platform_output);
 
         self.shapes = shapes;
