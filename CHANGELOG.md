@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `EguiWindow`: owns the window and takes the first renderer from a list that
+  comes up (`Renderer::FALLBACK_CHAIN` — GLES 3.0, GL 3.2 core, then `Canvas`),
+  so a device with no usable GL still gets a UI. Its `paint` clears, paints and
+  presents whichever backend won.
+
 ## [0.7.0] - 2026-07-30
 
 ### Added

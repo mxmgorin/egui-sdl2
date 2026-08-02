@@ -23,7 +23,7 @@ glow-backend = ["glow", "egui_glow"]
 # Enable rendering via canvas
 canvas-backend = ["sdl2-sys", "bytemuck", "egui/bytemuck", "sdl2/unsafe_textures"]
 # Enable rendering via canvas
-wgpu-backend = ["egui-wgpu", "egui-wgpu/capture", "web-time", "sdl2/raw-window-handle"]
+wgpu-backend = ["egui-wgpu", "egui-wgpu/capture", "web-time", "sdl2/raw-window-handle", "pollster"]
 # Enable opening links in a browser when an egui hyperlink is clicked.
 links = ["webbrowser"]
 # Forward sdl2 features
@@ -55,6 +55,8 @@ bytemuck = { version = "1.25.2", optional = true }
 # wgpu-backend:
 egui-wgpu = { version = "0.35.0", optional = true }
 web-time = { version = "1.1.0", optional = true }
+# EguiWindow blocks on wgpu's async setup at startup.
+pollster = { version = "1.0.1", optional = true }
 
 [dev-dependencies]
 pollster = { version = "1.0.1" }
@@ -73,6 +75,10 @@ required-features = ["glow-backend"]
 [[example]]
 name = "wgpu"
 required-features = ["wgpu-backend"]
+
+[[example]]
+name = "window"
+required-features = ["glow-backend", "canvas-backend"]
 
 # Build docs on docs.rs with every rendering backend enabled; otherwise the
 # wgpu module (not in the default feature set) would be missing from the docs.

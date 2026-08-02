@@ -31,6 +31,31 @@ Enable exactly what you need via feature flags:
 - `glow-backend` — OpenGL via [`glow`](https://crates.io/crates/glow)
 - `wgpu-backend` — WebGPU via [`wgpu`](https://github.com/gfx-rs/wgpu)
 
+### Or let it pick
+
+`EguiWindow` owns the window and walks a list of renderers, keeping the first
+that comes up. A device with missing or broken GL drivers falls through to SDL's
+renderer and still shows a UI instead of exiting:
+
+```rust
+let mut egui = egui_sdl2::EguiWindow::new(
+    &video,
+    "Egui SDL2",
+    (800, 600),
+    |builder| { builder.resizable(); },
+    &egui_sdl2::Renderer::FALLBACK_CHAIN, // GLES 3.0, then GL 3.2 core, then Canvas
+)?;
+println!("running on {:?}", egui.renderer());
+
+loop {
+    for event in event_pump.poll_iter() {
+        egui.on_event(&event);
+    }
+    egui.run(|ctx: &egui::Context| {});
+    egui.paint([0.1, 0.1, 0.1, 1.0]); // clears, paints and presents
+}
+```
+
 ## Usage
 
 ```rust
@@ -68,6 +93,9 @@ directory. To run the `canvas` example:
 ```sh
 cargo run --example canvas
 ```
+
+The `window` example shows the picking path; `RENDERER=canvas cargo run
+--example window` forces the fallback.
 
 ## License
 

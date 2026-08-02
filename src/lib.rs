@@ -9,6 +9,8 @@
 //! - Render with the SDL2 software renderer via [`sdl2::render::Canvas`] (`canvas-backend` feature).
 //! - Render with OpenGL via [`glow`] (`glow-backend` feature).
 //! - Render with WebGPU via [`wgpu`](https://github.com/gfx-rs/wgpu) (`wgpu-backend` feature).
+//! - Or let [`EguiWindow`] pick: it walks a list of renderers and keeps the
+//!   first the device actually supports.
 //!
 //! ## Usage
 //! ```no_run
@@ -46,6 +48,12 @@ pub mod glow;
 pub mod state;
 #[cfg(feature = "wgpu-backend")]
 pub mod wgpu;
+#[cfg(any(
+    feature = "glow-backend",
+    feature = "canvas-backend",
+    feature = "wgpu-backend"
+))]
+pub mod window;
 
 #[cfg(feature = "canvas-backend")]
 pub use canvas::EguiCanvas;
@@ -54,6 +62,12 @@ pub use glow::*;
 pub use state::*;
 #[cfg(feature = "wgpu-backend")]
 pub use wgpu::EguiWgpu;
+#[cfg(any(
+    feature = "glow-backend",
+    feature = "canvas-backend",
+    feature = "wgpu-backend"
+))]
+pub use window::{EguiWindow, Renderer};
 
 /// The results of running one frame of `egui`.
 ///
