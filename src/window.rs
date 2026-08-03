@@ -46,6 +46,10 @@ pub enum Renderer {
     /// SDL's own 2D renderer: an accelerated driver when SDL finds one, its
     /// software rasterizer otherwise. The one that needs no GL at all.
     Canvas,
+    /// [`Self::Canvas`] rasterized offscreen, presented as one texture copy per
+    /// frame — for drivers that show nothing else, like the Miyoo Mini's
+    /// `mmiyoo`. Costs an upload per frame.
+    CanvasBlit,
     /// wgpu (`wgpu-backend` feature).
     Wgpu,
 }
@@ -59,6 +63,7 @@ impl Renderer {
             Renderer::Gles3 => "GLES 3.0",
             Renderer::Gl32 => "GL 3.2 core",
             Renderer::Canvas => "SDL renderer",
+            Renderer::CanvasBlit => "SDL renderer (offscreen blit)",
             Renderer::Wgpu => "wgpu",
         }
     }
@@ -76,6 +81,17 @@ enum Backend {
     Canvas {
         canvas: sdl2::render::WindowCanvas,
         egui: crate::EguiCanvas,
+    },
+    #[cfg(feature = "canvas-backend")]
+    CanvasBlit {
+        canvas: sdl2::render::WindowCanvas,
+        /// egui is drawn here, by SDL's software renderer.
+        offscreen: sdl2::render::Canvas<sdl2::surface::Surface<'static>>,
+        /// The offscreen pixels, uploaded and copied once per frame.
+        present: sdl2::render::Texture,
+        /// Size `offscreen` and `present` were built for.
+        size: (u32, u32),
+        egui: crate::EguiCanvas<sdl2::surface::SurfaceContext<'static>>,
     },
     // Boxed: an EguiWgpu is twice the size of the other variants.
     #[cfg(feature = "wgpu-backend")]
@@ -134,6 +150,8 @@ impl EguiWindow {
             Backend::Glow { egui, .. } => &egui.ctx,
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { egui, .. } => &egui.ctx,
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { egui, .. } => &egui.ctx,
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => &egui.ctx,
         }
@@ -145,6 +163,8 @@ impl EguiWindow {
             Backend::Glow { window, .. } => window,
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { canvas, .. } => canvas.window(),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { canvas, .. } => canvas.window(),
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => &egui.window,
         }
@@ -158,6 +178,8 @@ impl EguiWindow {
             Backend::Glow { window, .. } => window,
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { canvas, .. } => canvas.window_mut(),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { canvas, .. } => canvas.window_mut(),
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => &mut egui.window,
         }
@@ -170,6 +192,8 @@ impl EguiWindow {
             Backend::Glow { window, egui, .. } => egui.state.on_event(window, event),
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { canvas, egui } => egui.state.on_event(canvas.window(), event),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { canvas, egui, .. } => egui.state.on_event(canvas.window(), event),
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => egui.on_event(event),
         }
@@ -182,6 +206,8 @@ impl EguiWindow {
             Backend::Glow { egui, .. } => egui.run(run_ui),
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { egui, .. } => egui.run(run_ui),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { egui, .. } => egui.run(run_ui),
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => egui.run(run_ui),
         }
@@ -194,6 +220,8 @@ impl EguiWindow {
             Backend::Glow { egui, .. } => egui.run_ui(run_ui),
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { egui, .. } => egui.run_ui(run_ui),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { egui, .. } => egui.run_ui(run_ui),
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => egui.run_ui(run_ui),
         }
@@ -206,6 +234,8 @@ impl EguiWindow {
             Backend::Glow { egui, .. } => egui.repaint_delay(),
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { egui, .. } => egui.repaint_delay(),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { egui, .. } => egui.repaint_delay(),
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => egui.repaint_delay(),
         }
@@ -227,6 +257,46 @@ impl EguiWindow {
                 egui.paint(canvas);
                 canvas.present();
             }
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit {
+                canvas,
+                offscreen,
+                present,
+                size,
+                egui,
+            } => {
+                // Rebuild on resize so surface, texture and window stay 1:1.
+                if canvas.output_size().is_ok_and(|s| s != *size) {
+                    match rebuild_blit_targets(canvas) {
+                        Ok((new_offscreen, new_present, new_size)) => {
+                            egui.destroy();
+                            *egui = crate::EguiCanvas::for_surface(canvas.window(), &new_offscreen);
+                            *offscreen = new_offscreen;
+                            *present = new_present;
+                            *size = new_size;
+                        }
+                        Err(e) => log::error!("could not resize the offscreen target: {e}"),
+                    }
+                }
+
+                offscreen.set_draw_color(rgb(clear_color));
+                offscreen.clear();
+                egui.paint(offscreen);
+                let surface = offscreen.surface();
+                let pitch = surface.pitch() as usize;
+                match surface.without_lock() {
+                    Some(pixels) => {
+                        if let Err(e) = present.update(None, pixels, pitch) {
+                            log::error!("could not upload the offscreen frame: {e}");
+                        }
+                    }
+                    None => log::error!("offscreen surface has no readable pixels"),
+                }
+                if let Err(e) = canvas.copy(present, None, None) {
+                    log::error!("could not blit the offscreen frame: {e}");
+                }
+                canvas.present();
+            }
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { egui } => egui.paint(clear_color),
         }
@@ -239,6 +309,8 @@ impl EguiWindow {
             Backend::Glow { egui, .. } => egui.destroy(),
             #[cfg(feature = "canvas-backend")]
             Backend::Canvas { egui, .. } => egui.destroy(),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { egui, .. } => egui.destroy(),
             #[cfg(feature = "wgpu-backend")]
             Backend::Wgpu { .. } => {}
         }
@@ -254,7 +326,29 @@ fn build(
         Renderer::Gles3 => build_glow(video, make_window, sdl2::video::GLProfile::GLES, 3, 0),
         Renderer::Gl32 => build_glow(video, make_window, sdl2::video::GLProfile::Core, 3, 2),
         Renderer::Canvas => build_canvas(video, make_window),
+        Renderer::CanvasBlit => build_canvas_blit(video, make_window),
         Renderer::Wgpu => build_wgpu(video, make_window),
+    }
+}
+
+/// `SDL_GL_SetAttribute`, reported rather than asserted.
+#[cfg(feature = "glow-backend")]
+fn set_gl_attr(name: &str, attr: sdl2::sys::SDL_GLattr, value: i32) -> Result<(), String> {
+    if unsafe { sdl2::sys::SDL_GL_SetAttribute(attr, value) } == 0 {
+        return Ok(());
+    }
+    Err(format!("{name}={value} rejected: {}", sdl2::get_error()))
+}
+
+/// The values `SDL_GL_CONTEXT_PROFILE_MASK` takes.
+#[cfg(feature = "glow-backend")]
+fn gl_profile_value(profile: sdl2::video::GLProfile) -> i32 {
+    use sdl2::video::GLProfile;
+    match profile {
+        GLProfile::Core => 1,
+        GLProfile::Compatibility => 2,
+        GLProfile::GLES => 4,
+        GLProfile::Unknown(i) => i,
     }
 }
 
@@ -266,12 +360,18 @@ fn build_glow(
     major: u8,
     minor: u8,
 ) -> Result<Backend, String> {
-    {
-        let gl_attr = video.gl_attr();
-        gl_attr.set_context_profile(profile);
-        gl_attr.set_context_version(major, minor);
-        gl_attr.set_double_buffer(true);
-    }
+    // Not `video.gl_attr()`: its setters panic on rejection, which would kill
+    // the fallthrough on a device without GL.
+    use sdl2::sys::SDL_GLattr::*;
+    set_gl_attr(
+        "profile_mask",
+        SDL_GL_CONTEXT_PROFILE_MASK,
+        gl_profile_value(profile),
+    )?;
+    set_gl_attr("major_version", SDL_GL_CONTEXT_MAJOR_VERSION, major as i32)?;
+    set_gl_attr("minor_version", SDL_GL_CONTEXT_MINOR_VERSION, minor as i32)?;
+    set_gl_attr("doublebuffer", SDL_GL_DOUBLEBUFFER, 1)?;
+
     let window = make_window(video, true)?;
     let gl_context = window.gl_create_context()?;
     window.gl_make_current(&gl_context)?;
@@ -315,6 +415,56 @@ fn build_canvas(
     log::debug!("SDL renderer driver: {}", canvas.info().name);
     let egui = crate::EguiCanvas::new(&canvas);
     Ok(Backend::Canvas { canvas, egui })
+}
+
+/// The offscreen surface, its presentation texture, and the size both cover.
+#[cfg(feature = "canvas-backend")]
+type BlitTargets = (
+    sdl2::render::Canvas<sdl2::surface::Surface<'static>>,
+    sdl2::render::Texture,
+    (u32, u32),
+);
+
+#[cfg(feature = "canvas-backend")]
+fn rebuild_blit_targets(canvas: &sdl2::render::WindowCanvas) -> Result<BlitTargets, String> {
+    let size = canvas.output_size()?;
+    let surface =
+        sdl2::surface::Surface::new(size.0, size.1, crate::canvas::painter::PIXEL_FORMAT)?;
+    let offscreen = sdl2::render::Canvas::from_surface(surface)?;
+    let present = canvas
+        .texture_creator()
+        .create_texture_streaming(crate::canvas::painter::PIXEL_FORMAT, size.0, size.1)
+        .map_err(|e| e.to_string())?;
+    Ok((offscreen, present, size))
+}
+
+#[cfg(feature = "canvas-backend")]
+fn build_canvas_blit(
+    video: &VideoSubsystem,
+    make_window: &impl Fn(&VideoSubsystem, bool) -> Result<Window, String>,
+) -> Result<Backend, String> {
+    let window = make_window(video, false)?;
+    // No vsync request: not every driver this mode serves advertises it, and
+    // asking excludes those that don't.
+    let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+    log::debug!("SDL renderer driver: {} (blit)", canvas.info().name);
+    let (offscreen, present, size) = rebuild_blit_targets(&canvas)?;
+    let egui = crate::EguiCanvas::for_surface(canvas.window(), &offscreen);
+    Ok(Backend::CanvasBlit {
+        canvas,
+        offscreen,
+        present,
+        size,
+        egui,
+    })
+}
+
+#[cfg(not(feature = "canvas-backend"))]
+fn build_canvas_blit(
+    _video: &VideoSubsystem,
+    _make_window: &impl Fn(&VideoSubsystem, bool) -> Result<Window, String>,
+) -> Result<Backend, String> {
+    Err("built without the canvas-backend feature".to_string())
 }
 
 #[cfg(not(feature = "canvas-backend"))]

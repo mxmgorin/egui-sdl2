@@ -21,31 +21,25 @@
 pub mod painter;
 pub use painter::*;
 
-use sdl2::render::Canvas;
-use sdl2::video::Window;
+use sdl2::render::{Canvas, RenderTarget};
+use sdl2::surface::{Surface, SurfaceContext};
+use sdl2::video::{Window, WindowContext};
 
 /// Integration between [`egui`] and [`sdl2::render::Canvas`] for app based on [`sdl2`].
-pub struct EguiCanvas {
+///
+/// `C` is the render target's context: a window's by default, a surface's when
+/// painting offscreen (see [`EguiCanvas::for_target`]).
+pub struct EguiCanvas<C = WindowContext> {
     run_output: crate::EguiRunOutput,
     pub ctx: egui::Context,
     pub state: crate::State,
-    pub painter: Painter,
+    pub painter: Painter<C>,
 }
 
-impl EguiCanvas {
+impl EguiCanvas<WindowContext> {
     /// Pass the same `canvas` to [`Self::on_event`] and [`Self::paint`].
     pub fn new(canvas: &Canvas<Window>) -> Self {
-        let ctx = egui::Context::default();
-        let state = crate::State::new(canvas.window(), ctx.clone(), egui::ViewportId::ROOT);
-        let run_output = crate::EguiRunOutput::default();
-        let painter = Painter::new(canvas);
-
-        Self {
-            ctx,
-            painter,
-            state,
-            run_output,
-        }
+        Self::assemble(canvas.window(), Painter::new(canvas))
     }
 
     #[inline]
@@ -55,6 +49,40 @@ impl EguiCanvas {
         event: &sdl2::event::Event,
     ) -> crate::EventResponse {
         self.state.on_event(canvas.window(), event)
+    }
+}
+
+impl<'s> EguiCanvas<SurfaceContext<'s>> {
+    /// Paint into a surface rather than the window, for drivers that only present
+    /// texture copies. Input and sizing still come from `window`.
+    pub fn for_surface(window: &Window, canvas: &Canvas<Surface<'s>>) -> Self {
+        Self::assemble(window, Painter::for_surface(canvas))
+    }
+}
+
+impl<C> EguiCanvas<C> {
+    fn assemble(window: &Window, painter: Painter<C>) -> Self {
+        let ctx = egui::Context::default();
+        let mut state = crate::State::new(window, ctx.clone(), egui::ViewportId::ROOT);
+        state.set_max_texture_side(painter.max_texture_side());
+
+        Self {
+            ctx,
+            painter,
+            state,
+            run_output: crate::EguiRunOutput::default(),
+        }
+    }
+
+    /// [`EguiCanvas::on_event`] for an offscreen canvas, which has no window of
+    /// its own.
+    #[inline]
+    pub fn on_window_event(
+        &mut self,
+        window: &Window,
+        event: &sdl2::event::Event,
+    ) -> crate::EventResponse {
+        self.state.on_event(window, event)
     }
 
     /// Call [`Self::paint`] later to paint.
@@ -80,7 +108,7 @@ impl EguiCanvas {
 
     /// Paint the results of the last call to [`Self::run`]. Clear the canvas (and
     /// draw your own content) beforehand; present it afterwards.
-    pub fn paint(&mut self, canvas: &mut Canvas<Window>) {
+    pub fn paint<T: RenderTarget<Context = C>>(&mut self, canvas: &mut Canvas<T>) {
         let pixels_per_point = self.run_output.pixels_per_point;
         let (textures_delta, shapes) = self.run_output.take();
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);

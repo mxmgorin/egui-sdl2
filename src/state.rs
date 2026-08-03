@@ -117,6 +117,14 @@ impl State {
         self.pointer_pos_in_points
     }
 
+    /// Cap the texture size egui lays its font atlas out for, from the painter's
+    /// own limit. egui defaults to 2048, past what handheld drivers accept, and
+    /// the atlas is allocated before the first frame.
+    #[inline]
+    pub fn set_max_texture_side(&mut self, max_texture_side: Option<usize>) {
+        self.egui_input.max_texture_side = max_texture_side;
+    }
+
     #[inline]
     pub fn set_theme(&mut self, theme: egui::Theme) {
         self.egui_input.system_theme.replace(theme);
