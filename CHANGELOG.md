@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-08-02
+## [0.8.1] - 2026-08-03
+
+### Added
+
+- `Renderer::CanvasBlit`: the canvas rasterized offscreen by SDL's software
+  renderer and presented as one texture copy per frame, for drivers that show
+  nothing else. The Miyoo Mini's `mmiyoo` drops geometry and window-surface
+  updates without reporting an error, so anything drawn straight to the window
+  never appears. Costs a full-frame upload, so `Canvas` stays the default.
+- `Painter::for_surface` and `EguiCanvas::for_surface`, painting into a surface
+  while input and sizing still come from the window. `Painter` and `EguiCanvas`
+  gained a render-target context parameter, defaulted to `WindowContext`.
+- `Painter::max_texture_side` and `State::set_max_texture_side`, so egui lays its
+  font atlas out within what the driver holds.
+
+### Fixed
+
+- Text and rectangles are blitted rather than rasterized as triangles. SDL's
+  software triangle blit drops the last row of a textured triangle (still present
+  in the 2.26 forks handhelds ship), which clipped the bottom of every glyph; a
+  blit is also cheaper than per-pixel triangle work where there is no GPU.
+- Creating the font atlas no longer panics on drivers that cap texture size below
+  egui's 2048 default — the cap is reported to egui instead.
+- A rejected GL attribute no longer panics: `build_glow` sets them through
+  `SDL_GL_SetAttribute` and reports the error, so `EguiWindow` falls through to
+  the next renderer as intended. `video.gl_attr()`'s setters panic, which took
+  the process down on devices without GL.
 
 ### Added
 
