@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-08-11
+
+### Fixed
+
+- Canvas backends draw partial alpha correctly. egui's colours are premultiplied
+  while SDL's `BLEND` is `src*a + dst*(1-a)`, which multiplied by alpha a second
+  time; vertex colours and textures are handed over unmultiplied now. The
+  renderer's own blend mode is set for the run too, because SDL leaves it at
+  `None` — an untextured half-transparent fill overwrote what lay under it instead
+  of blending, so egui's fade-in of a new panel or window showed as a dark flash
+  for a few frames, close to black on a dark theme.
+- Feathered edges render as antialiasing rather than a dark fringe. Feathering
+  fades a shape's edge to fully transparent, and epaint gives that end no hue —
+  SDL interpolates vertex colours as straight alpha, so the gradient ran to
+  black rather than to invisible, showing as a dark line along the bottom and
+  right of the window, where a full-screen fill's soft edge lands. Transparent
+  vertices now take the hue their triangle already carries, which makes the
+  interpolation a correct antialiased fade.
+- The frame `CanvasBlit` presents replaces the window's pixels rather than
+  blending with them. SDL gives a texture whose format carries alpha
+  `SDL_BLENDMODE_BLEND` by default, which dimmed any pixel left short of opaque.
+
 ## [0.8.1] - 2026-08-03
 
 ### Added
@@ -116,7 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.6.0...v0.7.0

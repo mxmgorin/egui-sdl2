@@ -44,6 +44,9 @@ pub struct Painter<C = WindowContext> {
     last_clip: Option<Rect>,
     /// Triangles waiting to be drawn, so a run of them is still one SDL call.
     index_scratch: Vec<u32>,
+    /// Reused for the straight-alpha copy an upload needs; the atlas is uploaded
+    /// whole whenever it grows, which is not the frame to be allocating in.
+    pixel_scratch: Vec<u8>,
     /// This renderer's texture size limit, for egui to lay its atlas out within.
     max_texture_side: Option<usize>,
 }
@@ -71,6 +74,7 @@ impl<C> Painter<C> {
             texture_creator,
             vertex_scratch: Vec::new(),
             index_scratch: Vec::new(),
+            pixel_scratch: Vec::new(),
             last_clip: None,
             max_texture_side,
         }
@@ -125,6 +129,11 @@ impl<C> Painter<C> {
         // The caller may have drawn to the canvas (and changed its clip) since
         // the last run, so don't assume any clip is still applied.
         self.last_clip = None;
+        // Untextured geometry and rectangle fills blend by the renderer's mode,
+        // which SDL leaves at `None` — so a half-transparent fill would overwrite
+        // instead of blending. Textures carry their own mode (`create_texture`).
+        let caller_blend = canvas.blend_mode();
+        canvas.set_blend_mode(BlendMode::Blend);
         for job in paint_jobs.into_iter() {
             match job.primitive {
                 Primitive::Mesh(mesh) => {
@@ -143,11 +152,21 @@ impl<C> Painter<C> {
         if self.last_clip.is_some() {
             canvas.set_clip_rect(None);
         }
+        canvas.set_blend_mode(caller_blend);
     }
 
     pub fn set_texture(&mut self, id: egui::TextureId, delta: &ImageDelta) {
         let ImageData::Color(img) = &delta.image;
-        let bytes: &[u8] = bytemuck::cast_slice(img.pixels.as_ref());
+        // Straight alpha, to match the vertex colours: see `into_sdl_vertex`. The
+        // font atlas arrives as premultiplied white coverage, and becomes white
+        // with the coverage in alpha, which is what modulating a texture expects.
+        self.pixel_scratch.clear();
+        self.pixel_scratch
+            .reserve(img.pixels.len() * BYTES_PER_PIXEL);
+        for pixel in img.pixels.iter() {
+            self.pixel_scratch
+                .extend_from_slice(&pixel.to_srgba_unmultiplied());
+        }
         let w = img.width() as u32;
         let h = img.height() as u32;
         let pitch = (w as usize) * BYTES_PER_PIXEL;
@@ -166,7 +185,7 @@ impl<C> Painter<C> {
             .entry(id)
             .or_insert_with(|| create_texture(&self.texture_creator, w, h));
         let rect = delta.pos.map(|[x, y]| Rect::new(x as i32, y as i32, w, h));
-        tex.update(rect, bytes, pitch).unwrap();
+        tex.update(rect, &self.pixel_scratch, pitch).unwrap();
     }
 
     #[inline]
@@ -256,6 +275,24 @@ impl<C> Painter<C> {
                 .iter()
                 .map(|v| into_sdl_vertex(v, pixels_per_point)),
         );
+        // A feather vertex is fully transparent and epaint gives it no hue, so
+        // SDL's straight-alpha interpolation would fade it to black. With its
+        // triangle's own hue the ramp stays on colour — antialiasing, not a
+        // dark fringe. Corners are only shared within one path, so a triangle
+        // may safely write the hue its path owns.
+        for triangle in self.index_scratch.chunks_exact(3) {
+            let hue = triangle
+                .iter()
+                .map(|&i| self.vertex_scratch[i as usize].color)
+                .find(|c| c.a != 0);
+            let Some(hue) = hue else { continue };
+            for &i in triangle {
+                let c = &mut self.vertex_scratch[i as usize].color;
+                if c.a == 0 {
+                    (c.r, c.g, c.b) = (hue.r, hue.g, hue.b);
+                }
+            }
+        }
         let verts_len = self.vertex_scratch.len() as c_int;
         let indcs_len = self.index_scratch.len() as c_int;
 
@@ -297,10 +334,10 @@ impl Quad {
         texture_ptr: *mut sdl2_sys::SDL_Texture,
         texture_size: Option<(f32, f32)>,
     ) {
-        let (r, g, b, a) = self.color.to_tuple();
+        let [r, g, b, a] = self.color.to_srgba_unmultiplied();
         let result = match (self.textured, texture_size) {
             (true, Some((tw, th))) => unsafe {
-                // The atlas is premultiplied white coverage; modulating it matches
+                // The atlas is white with coverage in alpha; modulating it matches
                 // what the triangle path does per vertex.
                 sdl2_sys::SDL_SetTextureColorMod(texture_ptr, r, g, b);
                 sdl2_sys::SDL_SetTextureAlphaMod(texture_ptr, a);
@@ -407,19 +444,20 @@ fn create_texture<C>(texture_creator: &TextureCreator<C>, w: u32, h: u32) -> Tex
 
     tex
 }
+/// egui's colours are premultiplied; SDL's `BLEND` is `src*a + dst*(1-a)`, which
+/// multiplies by alpha a second time. Undo the premultiplication and the two
+/// agree — otherwise everything drawn with partial alpha comes out too dark, and
+/// an untextured fill (whose blend mode SDL defaults to `NONE`) loses the
+/// destination entirely, so egui's fade-in of a new panel reads as a dark flash.
 #[inline]
 fn into_sdl_vertex(vertex: &egui::epaint::Vertex, pixels_per_point: f32) -> SDL_Vertex {
+    let [r, g, b, a] = vertex.color.to_srgba_unmultiplied();
     SDL_Vertex {
         position: SDL_FPoint {
             x: vertex.pos.x * pixels_per_point,
             y: vertex.pos.y * pixels_per_point,
         },
-        color: SDL_Color {
-            r: vertex.color.r(),
-            g: vertex.color.g(),
-            b: vertex.color.b(),
-            a: vertex.color.a(),
-        },
+        color: SDL_Color { r, g, b, a },
         tex_coord: SDL_FPoint {
             x: vertex.uv.x,
             y: vertex.uv.y,

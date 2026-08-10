@@ -431,10 +431,15 @@ fn rebuild_blit_targets(canvas: &sdl2::render::WindowCanvas) -> Result<BlitTarge
     let surface =
         sdl2::surface::Surface::new(size.0, size.1, crate::canvas::painter::PIXEL_FORMAT)?;
     let offscreen = sdl2::render::Canvas::from_surface(surface)?;
-    let present = canvas
+    let mut present = canvas
         .texture_creator()
         .create_texture_streaming(crate::canvas::painter::PIXEL_FORMAT, size.0, size.1)
         .map_err(|e| e.to_string())?;
+    // A whole frame replaces rather than blends. SDL gives a format with alpha
+    // `BLEND` by default, which would dim any pixel the offscreen renderer left
+    // short of opaque against whatever the window happened to hold, and there is
+    // nothing under a full frame worth mixing in.
+    present.set_blend_mode(sdl2::render::BlendMode::None);
     Ok((offscreen, present, size))
 }
 

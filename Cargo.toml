@@ -1,6 +1,6 @@
 [package]
 name = "egui-sdl2"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 rust-version = "1.92"
 description = "egui integration for SDL2: event handling and software, OpenGL, or wgpu rendering"

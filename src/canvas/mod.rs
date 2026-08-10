@@ -63,6 +63,9 @@ impl<'s> EguiCanvas<SurfaceContext<'s>> {
 impl<C> EguiCanvas<C> {
     fn assemble(window: &Window, painter: Painter<C>) -> Self {
         let ctx = egui::Context::default();
+        // Feathering stays on: its hue-less transparent ends are given their
+        // path's hue in `Painter::flush_triangles`, which makes SDL's
+        // straight-alpha interpolation a correct antialiased fade.
         let mut state = crate::State::new(window, ctx.clone(), egui::ViewportId::ROOT);
         state.set_max_texture_side(painter.max_texture_side());
 
