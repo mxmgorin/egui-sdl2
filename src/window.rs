@@ -788,7 +788,7 @@ mod tests {
     }
 
     #[test]
-    fn a_quarter_turn_anticlockwise_is_the_other_way_round() {
+    fn a_quarter_turn_counterclockwise_is_the_other_way_round() {
         assert_eq!(presented(Rotation::Cw270), [1, 11, 21, 0, 10, 20]);
     }
 }

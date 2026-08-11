@@ -18,8 +18,8 @@ pub enum Rotation {
     Cw90,
     /// Upside down, for a panel mounted that way.
     Cw180,
-    /// A quarter turn anticlockwise: the screen's top edge runs up the window's
-    /// left side.
+    /// A quarter turn counterclockwise: the screen's top edge runs up the
+    /// window's left side.
     Cw270,
 }
 
@@ -43,7 +43,7 @@ impl Rotation {
         }
     }
 
-    /// Wrapping, and negative turns count anticlockwise, so callers may add
+    /// Wrapping, and negative turns count counterclockwise, so callers may add
     /// turns without normalising first.
     #[inline]
     pub fn from_quarter_turns(turns: i32) -> Self {
