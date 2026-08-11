@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-11
+
 ### Added
 
 - `Rotation` and `EguiWindow::set_rotation`: present the UI at a quarter turn to
@@ -170,7 +172,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.0...v0.8.1
