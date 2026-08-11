@@ -99,20 +99,26 @@ impl<C> Painter<C> {
     }
 
     /// You are expected to have cleared the color buffer before calling this.
+    ///
+    /// The deltas are drained: egui 0.36 asserts on drop that every delta was
+    /// handled, so applying consumes them.
     pub fn paint_and_update_textures<T: RenderTarget<Context = C>>(
         &mut self,
         canvas: &mut Canvas<T>,
         pixels_per_point: f32,
-        textures_delta: &TexturesDelta,
+        textures_delta: &mut TexturesDelta,
         paint_jobs: Vec<ClippedPrimitive>,
     ) -> Result<(), String> {
-        for (id, delta) in &textures_delta.set {
-            self.set_texture(*id, delta);
+        // egui 0.36 batches several deltas per texture; apply them in order.
+        for (id, deltas) in textures_delta.set.drain() {
+            for delta in deltas {
+                self.set_texture(id, &delta);
+            }
         }
 
         self.paint_primitives(canvas, pixels_per_point, paint_jobs);
 
-        for &id in &textures_delta.free {
+        for id in textures_delta.free.drain() {
             self.free_texture(&id);
         }
 

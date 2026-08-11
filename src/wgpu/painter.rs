@@ -282,16 +282,21 @@ impl Painter {
         pixels_per_point: f32,
         clear_color: [f32; 4],
         clipped_primitives: &[egui::ClippedPrimitive],
-        textures_delta: &egui::TexturesDelta,
+        // Drained: egui 0.36 asserts on drop that every delta was handled.
+        textures_delta: &mut egui::TexturesDelta,
         capture_data: Vec<egui::UserData>,
     ) -> f32 {
         let capture = !capture_data.is_empty();
         let mut vsync_sec = 0.0;
 
         let Some(render_state) = self.render_state.as_mut() else {
+            // Nothing to apply the deltas to; dropping them unapplied would
+            // trip egui 0.36's drop check.
+            textures_delta.clear();
             return vsync_sec;
         };
         let Some(surface_state) = self.surfaces.get(&viewport_id) else {
+            textures_delta.clear();
             return vsync_sec;
         };
 
@@ -309,13 +314,16 @@ impl Painter {
 
         let user_cmd_bufs = {
             let mut renderer = render_state.renderer.write();
-            for (id, image_delta) in &textures_delta.set {
-                renderer.update_texture(
-                    &render_state.device,
-                    &render_state.queue,
-                    *id,
-                    image_delta,
-                );
+            // egui 0.36 batches several deltas per texture; apply them in order.
+            for (id, image_deltas) in textures_delta.set.drain() {
+                for image_delta in image_deltas {
+                    renderer.update_texture(
+                        &render_state.device,
+                        &render_state.queue,
+                        id,
+                        &image_delta,
+                    );
+                }
             }
 
             renderer.update_buffers(
@@ -446,8 +454,8 @@ impl Painter {
         // However, once we called `egui_wgpu::wgpu::Queue::submit`, it is up for wgpu to determine how long the underlying gpu resource has to live.
         {
             let mut renderer = render_state.renderer.write();
-            for id in &textures_delta.free {
-                renderer.free_texture(id);
+            for id in textures_delta.free.drain() {
+                renderer.free_texture(&id);
             }
         }
 
@@ -466,7 +474,8 @@ impl Painter {
         {
             // wgpu doesn't document where vsync can happen. Maybe here?
             let start = web_time::Instant::now();
-            output_frame.present();
+            // wgpu 30 presents through the queue rather than the texture.
+            render_state.queue.present(output_frame);
             vsync_sec += start.elapsed().as_secs_f32();
         }
 

@@ -119,6 +119,14 @@ impl Default for EguiRunOutput {
     }
 }
 
+impl Drop for EguiRunOutput {
+    fn drop(&mut self) {
+        // An app may quit between `run` and `paint`; deltas never painted are
+        // dropped on purpose, which egui 0.36's own drop check asserts against.
+        self.textures_delta.clear();
+    }
+}
+
 impl EguiRunOutput {
     /// Run `egui` for one frame and update this output with the results.
     ///

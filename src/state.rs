@@ -50,6 +50,9 @@ pub struct State {
     /// they don't emit phantom clicks. Cleared on its up/cancel.
     pointer_touch_id: Option<i64>,
     current_cursor: Option<CurrentCursor>,
+    /// The held modifier keys. egui 0.36 takes them as a `ModifiersChanged`
+    /// event rather than a `RawInput` field, so the current set lives here.
+    modifiers: egui::Modifiers,
     clipboard: sdl2::clipboard::ClipboardUtil,
     window_size: (u32, u32), // cache value and update on events
     // Drawable size in pixels, cached and refreshed on resize. `take_egui_input`
@@ -57,6 +60,22 @@ pub struct State {
     // `set_zoom_factor` after construction is reflected without waiting for a
     // resize event (otherwise the UI lays out for the wrong rect until rotation).
     drawable_size: (u32, u32),
+}
+
+/// A file dropped onto the window. egui 0.36 takes dropped files as a trait
+/// object the integration owns; SDL hands over a path, and the bytes are read
+/// from it on demand.
+#[derive(Debug)]
+struct SdlDroppedFile(std::path::PathBuf);
+
+impl egui::DroppedFile for SdlDroppedFile {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
 }
 
 /// Represents currently active cursor.
@@ -93,6 +112,7 @@ impl State {
             pointer_pos_in_points: None,
             pointer_touch_id: None,
             current_cursor: None,
+            modifiers: egui::Modifiers::default(),
             window_size,
             drawable_size,
         }
@@ -263,17 +283,17 @@ impl State {
                 let dx = *x as f32;
                 let dy = *y as f32;
 
-                if self.egui_input.modifiers.command {
+                if self.modifiers.command {
                     // zoom
                     let delta = (dy / 125.0).exp();
                     self.egui_input.events.push(egui::Event::Zoom(delta));
-                } else if self.egui_input.modifiers.shift {
+                } else if self.modifiers.shift {
                     // horizontal scroll
                     self.egui_input.events.push(egui::Event::MouseWheel {
                         unit: MouseWheelUnit::Line,
                         delta: egui::vec2(dx + dy, 0.0),
                         phase: egui::TouchPhase::Move,
-                        modifiers: self.egui_input.modifiers,
+                        modifiers: self.modifiers,
                     });
                 } else {
                     // regular scroll
@@ -281,7 +301,7 @@ impl State {
                         unit: MouseWheelUnit::Line,
                         delta: egui::vec2(dx, dy),
                         phase: egui::TouchPhase::Move,
-                        modifiers: self.egui_input.modifiers,
+                        modifiers: self.modifiers,
                     });
                 }
                 EventResponse {
@@ -305,11 +325,11 @@ impl State {
             } => {
                 let resp = self.on_keyboard_event(*kc, *sc, *keymod, true, *repeat);
 
-                if self.egui_input.modifiers.command && *kc == Keycode::C {
+                if self.modifiers.command && *kc == Keycode::C {
                     self.egui_input.events.push(egui::Event::Copy);
-                } else if self.egui_input.modifiers.command && *kc == Keycode::X {
+                } else if self.modifiers.command && *kc == Keycode::X {
                     self.egui_input.events.push(egui::Event::Cut);
-                } else if self.egui_input.modifiers.command && *kc == Keycode::V {
+                } else if self.modifiers.command && *kc == Keycode::V {
                     if let Ok(contents) = self.clipboard.clipboard_text() {
                         self.egui_input.events.push(egui::Event::Text(contents));
                     }
@@ -325,9 +345,8 @@ impl State {
                 if !text.is_empty() {
                     // On some platforms we get here when the user presses Cmd-C (copy), ctrl-W, etc.
                     // We need to ignore these characters that are side-effects of commands.
-                    let is_cmd = self.egui_input.modifiers.ctrl
-                        || self.egui_input.modifiers.command
-                        || self.egui_input.modifiers.mac_cmd;
+                    let is_cmd =
+                        self.modifiers.ctrl || self.modifiers.command || self.modifiers.mac_cmd;
 
                     if !is_cmd {
                         self.egui_input
@@ -341,10 +360,11 @@ impl State {
                 resp
             }
             DropFile { filename, .. } => {
-                self.egui_input.dropped_files.push(egui::DroppedFile {
-                    path: Some(std::path::PathBuf::from(filename)),
-                    ..Default::default()
-                });
+                self.egui_input
+                    .dropped_files
+                    .push(std::sync::Arc::new(SdlDroppedFile(
+                        std::path::PathBuf::from(filename),
+                    )));
                 EventResponse {
                     repaint: true,
                     consumed: false,
@@ -443,7 +463,7 @@ impl State {
                     pos,
                     button: egui::PointerButton::Primary,
                     pressed: true,
-                    modifiers: self.egui_input.modifiers,
+                    modifiers: self.modifiers,
                 });
             }
             egui::TouchPhase::Move if self.pointer_touch_id == Some(info.finger_id) => {
@@ -459,7 +479,7 @@ impl State {
                         pos,
                         button: egui::PointerButton::Primary,
                         pressed: false,
-                        modifiers: self.egui_input.modifiers,
+                        modifiers: self.modifiers,
                     });
                 }
                 // A touch pointer has no hover position once lifted; tell egui it's
@@ -550,7 +570,7 @@ impl State {
             pos,
             button,
             pressed,
-            modifiers: self.egui_input.modifiers,
+            modifiers: self.modifiers,
         });
         EventResponse {
             repaint: true,
@@ -570,13 +590,20 @@ impl State {
             return EventResponse::default();
         };
 
-        self.egui_input.modifiers = into_egui_modifiers(keymod);
+        let modifiers = into_egui_modifiers(keymod);
+        if modifiers != self.modifiers {
+            self.modifiers = modifiers;
+            // Before the key event, so egui reads the key under the new set.
+            self.egui_input
+                .events
+                .push(egui::Event::ModifiersChanged(modifiers));
+        }
         self.egui_input.events.push(egui::Event::Key {
             key,
             physical_key: into_egui_physical_key(scancode),
             pressed,
             repeat,
-            modifiers: self.egui_input.modifiers,
+            modifiers: self.modifiers,
         });
         // When pressing the Tab key, egui focuses the first focusable element, hence Tab always consumes.
         let consumed = self.egui_ctx.egui_wants_keyboard_input() || key == Key::Tab;

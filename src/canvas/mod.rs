@@ -113,12 +113,12 @@ impl<C> EguiCanvas<C> {
     /// draw your own content) beforehand; present it afterwards.
     pub fn paint<T: RenderTarget<Context = C>>(&mut self, canvas: &mut Canvas<T>) {
         let pixels_per_point = self.run_output.pixels_per_point;
-        let (textures_delta, shapes) = self.run_output.take();
+        let (mut textures_delta, shapes) = self.run_output.take();
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
         if let Err(e) = self.painter.paint_and_update_textures(
             canvas,
             pixels_per_point,
-            &textures_delta,
+            &mut textures_delta,
             clipped_primitives,
         ) {
             log::error!("Failed to paint: {e}");
