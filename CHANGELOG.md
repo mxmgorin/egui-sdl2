@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-11
+
+### Changed
+
+- Updated `egui`, `egui_glow` and `egui-wgpu` from 0.35 to 0.36 (wgpu 30, which
+  presents through the queue). MSRV is 1.95.
+- **Breaking:** `Painter::paint_and_update_textures` on the canvas and wgpu
+  backends takes `&mut TexturesDelta` and drains it — egui 0.36 batches several
+  deltas per texture and asserts on drop that every one was handled.
+- Modifiers are tracked by `State` and sent as `ModifiersChanged` events;
+  dropped files implement egui 0.36's `DroppedFile` trait, reading bytes from
+  the path on demand.
+
 ## [0.8.2] - 2026-08-11
 
 ### Fixed
@@ -138,7 +151,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.7.0...v0.8.0
