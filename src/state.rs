@@ -54,6 +54,9 @@ pub struct State {
     /// event rather than a `RawInput` field, so the current set lives here.
     modifiers: egui::Modifiers,
     clipboard: sdl2::clipboard::ClipboardUtil,
+    /// How far the frame is turned on its way to the window. The layout rect is
+    /// the turned screen, and pointer positions come back through it.
+    rotation: crate::Rotation,
     window_size: (u32, u32), // cache value and update on events
     // Drawable size in pixels, cached and refreshed on resize. `take_egui_input`
     // divides it by the *current* zoom each frame to rebuild `screen_rect`, so a
@@ -88,7 +91,9 @@ struct CurrentCursor {
 
 impl State {
     pub fn new(window: &Window, egui_ctx: egui::Context, viewport_id: egui::ViewportId) -> Self {
-        let screen_rect = new_screen_rect(&egui_ctx, window);
+        // Unturned until the embedder says otherwise; `set_rotation` is what a
+        // turned panel calls, and the rect is rebuilt every frame regardless.
+        let screen_rect = new_screen_rect(&egui_ctx, window, crate::Rotation::None);
         let mut egui_input = egui::RawInput {
             focused: false, // event will tell us when we have focus
             screen_rect,
@@ -113,9 +118,27 @@ impl State {
             pointer_touch_id: None,
             current_cursor: None,
             modifiers: egui::Modifiers::default(),
+            rotation: crate::Rotation::None,
             window_size,
             drawable_size,
         }
+    }
+
+    /// Present the UI at a quarter turn to the window, for a panel that is not
+    /// mounted the way it is read.
+    ///
+    /// This is the half of the turn that egui sees: the layout rect becomes the
+    /// turned screen, and pointer positions are mapped back into it. The other
+    /// half is the backend's — see [`crate::EguiWindow::set_rotation`], which
+    /// sets both.
+    #[inline]
+    pub fn set_rotation(&mut self, rotation: crate::Rotation) {
+        self.rotation = rotation;
+    }
+
+    #[inline]
+    pub fn rotation(&self) -> crate::Rotation {
+        self.rotation
     }
 
     #[inline]
@@ -214,8 +237,11 @@ impl State {
         if ppp > 0.0 {
             let points = egui::vec2(self.drawable_size.0 as f32, self.drawable_size.1 as f32) / ppp;
             if points.x > 0.0 && points.y > 0.0 {
+                // The screen egui lays out for is the *turned* one: a quarter
+                // turn trades width for height.
+                let screen = self.rotation.screen_size(points);
                 self.egui_input.screen_rect =
-                    Some(egui::Rect::from_min_size(egui::Pos2::ZERO, points));
+                    Some(egui::Rect::from_min_size(egui::Pos2::ZERO, screen));
             }
         }
 
@@ -242,15 +268,16 @@ impl State {
         self.egui_ctx.zoom_factor() * native_ppp
     }
 
-    /// Convert window pixel coordinates to egui points via [`Self::cached_pixels_per_point`].
+    /// Convert window pixel coordinates to egui points via
+    /// [`Self::cached_pixels_per_point`], and back through the rotation: egui
+    /// laid the frame out for the turned screen, so that is where a press has to
+    /// land.
     #[inline]
     fn pos_in_points(&self, x: f32, y: f32) -> egui::Pos2 {
         let ppp = self.cached_pixels_per_point();
-        if ppp > 0.0 {
-            egui::pos2(x, y) / ppp
-        } else {
-            egui::pos2(x, y)
-        }
+        let scale = if ppp > 0.0 { ppp } else { 1.0 };
+        let window = egui::vec2(self.drawable_size.0 as f32, self.drawable_size.1 as f32) / scale;
+        self.rotation.from_window(egui::pos2(x, y) / scale, window)
     }
 
     /// Call this when there is a new event.
@@ -626,7 +653,7 @@ impl State {
     fn on_size_chage(&mut self, window: &Window) {
         self.window_size = window.size();
         self.drawable_size = window.drawable_size();
-        self.egui_input.screen_rect = new_screen_rect(&self.egui_ctx, window);
+        self.egui_input.screen_rect = new_screen_rect(&self.egui_ctx, window, self.rotation);
         self.egui_input
             .viewports
             .entry(self.viewport_id)
@@ -736,12 +763,16 @@ pub fn pixels_per_point(egui_ctx: &egui::Context, window: &Window) -> f32 {
 }
 
 #[inline]
-fn new_screen_rect(egui_ctx: &egui::Context, window: &Window) -> Option<Rect> {
+fn new_screen_rect(
+    egui_ctx: &egui::Context,
+    window: &Window,
+    rotation: crate::Rotation,
+) -> Option<Rect> {
     let screen_size_in_pixels = screen_size_in_pixels(window);
     let screen_size_in_points = screen_size_in_pixels / pixels_per_point(egui_ctx, window);
 
     (screen_size_in_points.x > 0.0 && screen_size_in_points.y > 0.0)
-        .then(|| Rect::from_min_size(Pos2::ZERO, screen_size_in_points))
+        .then(|| Rect::from_min_size(Pos2::ZERO, rotation.screen_size(screen_size_in_points)))
 }
 
 #[inline]

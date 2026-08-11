@@ -89,11 +89,20 @@ impl EguiGlow {
     pub fn paint(&mut self) {
         let pixels_per_point = self.run_output.pixels_per_point;
         let (mut textures_delta, shapes) = self.run_output.take();
-        let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
+        let mut clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
         // egui laid out for the drawable (physical) size and the GL viewport
         // covers the physical framebuffer, so pass drawable size — not the
         // logical window size — or content is clipped/scaled wrong on HiDPI.
         let screen_size = self.state.get_drawable_size();
+        // The viewport is the window; a turned frame was laid out for the screen
+        // the other way round, so its geometry comes back here. GL draws the
+        // turned triangles at no cost, which is why this backend needs no
+        // offscreen pass.
+        let rotation = self.state.rotation();
+        if rotation != crate::Rotation::None && pixels_per_point > 0.0 {
+            let window = egui::vec2(screen_size.0 as f32, screen_size.1 as f32) / pixels_per_point;
+            rotation.turn_primitives(&mut clipped_primitives, window);
+        }
         self.painter.paint_and_update_textures(
             screen_size.into(),
             pixels_per_point,

@@ -128,7 +128,15 @@ impl EguiWgpu {
     pub fn paint(&mut self, clear_color: [f32; 4]) {
         let pixels_per_point = self.run_output.pixels_per_point;
         let (mut textures_delta, shapes) = self.run_output.take();
-        let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
+        let mut clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
+        // A turned frame was laid out for the screen the other way round; the
+        // surface is still the window, so bring the geometry back to it.
+        let rotation = self.state.rotation();
+        if rotation != crate::Rotation::None && pixels_per_point > 0.0 {
+            let size = self.state.get_drawable_size();
+            let window = egui::vec2(size.0 as f32, size.1 as f32) / pixels_per_point;
+            rotation.turn_primitives(&mut clipped_primitives, window);
+        }
         self.painter.paint_and_update_textures(
             self.viewport_id,
             pixels_per_point,

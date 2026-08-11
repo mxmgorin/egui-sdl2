@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Rotation` and `EguiWindow::set_rotation`: present the UI at a quarter turn to
+  the window, for a panel that is not mounted the way it is read. egui lays out
+  for the turned screen — a quarter turn trades the window's width and height —
+  and each backend puts the frame back on the panel its own way: the glow and
+  wgpu painters turn the tessellated geometry, the window canvas paints into a
+  render target and copies that across at an angle, and the offscreen blit turns
+  the frame as it uploads it, so a driver that shows nothing but a texture copy
+  still gets a turned screen. Pointer and touch positions travel back through
+  the turn, so a tap lands where it looks. `State::set_rotation` is the layout
+  half on its own, for an app driving a painter itself.
+
+### Changed
+
+- The offscreen blit's surface is square, on the window's longer edge, so a
+  change of turn rebuilds nothing — the renderer, and egui's textures with it,
+  outlive the turn.
+
 ## [0.9.0] - 2026-08-11
 
 ### Changed

@@ -45,6 +45,7 @@ pub use sdl2;
 pub mod canvas;
 #[cfg(feature = "glow-backend")]
 pub mod glow;
+pub mod rotation;
 pub mod state;
 #[cfg(feature = "wgpu-backend")]
 pub mod wgpu;
@@ -59,6 +60,7 @@ pub mod window;
 pub use canvas::EguiCanvas;
 #[cfg(feature = "glow-backend")]
 pub use glow::*;
+pub use rotation::Rotation;
 pub use state::*;
 #[cfg(feature = "wgpu-backend")]
 pub use wgpu::EguiWgpu;

@@ -30,6 +30,9 @@
 //! }
 //! ```
 
+#[cfg(feature = "canvas-backend")]
+use crate::canvas::painter::BYTES_PER_PIXEL;
+use crate::Rotation;
 use sdl2::event::Event;
 use sdl2::video::{Window, WindowBuilder};
 use sdl2::VideoSubsystem;
@@ -81,6 +84,9 @@ enum Backend {
     Canvas {
         canvas: sdl2::render::WindowCanvas,
         egui: crate::EguiCanvas,
+        /// Built the first time a turn is presented, and only then: an unturned
+        /// frame goes straight to the window as it always did.
+        turned: Option<TurnedTarget>,
     },
     #[cfg(feature = "canvas-backend")]
     CanvasBlit {
@@ -89,8 +95,10 @@ enum Backend {
         offscreen: sdl2::render::Canvas<sdl2::surface::Surface<'static>>,
         /// The offscreen pixels, uploaded and copied once per frame.
         present: sdl2::render::Texture,
-        /// Size `offscreen` and `present` were built for.
+        /// Window size `offscreen` and `present` were built for.
         size: (u32, u32),
+        /// The turned copy of the offscreen frame, reused across frames.
+        frame: Vec<u8>,
         egui: crate::EguiCanvas<sdl2::surface::SurfaceContext<'static>>,
     },
     // Boxed: an EguiWgpu is twice the size of the other variants.
@@ -144,6 +152,41 @@ impl EguiWindow {
         self.renderer
     }
 
+    /// Present the UI at a quarter turn to the window, for a panel that is not
+    /// mounted the way it is read.
+    ///
+    /// egui lays out for the turned screen — a quarter turn trades the window's
+    /// width and height — and this window puts the frame back on the panel:
+    /// [`Renderer::Gles3`] and [`Renderer::Gl32`] turn the geometry as they draw
+    /// it, the SDL renderers paint offscreen and present that turned. Pointer
+    /// and touch positions travel back the same way, so a tap lands where it
+    /// looks. May be called at any time; nothing is rebuilt on a change of turn.
+    pub fn set_rotation(&mut self, rotation: Rotation) {
+        match &mut self.backend {
+            #[cfg(feature = "glow-backend")]
+            Backend::Glow { egui, .. } => egui.state.set_rotation(rotation),
+            #[cfg(feature = "canvas-backend")]
+            Backend::Canvas { egui, .. } => egui.state.set_rotation(rotation),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { egui, .. } => egui.state.set_rotation(rotation),
+            #[cfg(feature = "wgpu-backend")]
+            Backend::Wgpu { egui } => egui.state.set_rotation(rotation),
+        }
+    }
+
+    pub fn rotation(&self) -> Rotation {
+        match &self.backend {
+            #[cfg(feature = "glow-backend")]
+            Backend::Glow { egui, .. } => egui.state.rotation(),
+            #[cfg(feature = "canvas-backend")]
+            Backend::Canvas { egui, .. } => egui.state.rotation(),
+            #[cfg(feature = "canvas-backend")]
+            Backend::CanvasBlit { egui, .. } => egui.state.rotation(),
+            #[cfg(feature = "wgpu-backend")]
+            Backend::Wgpu { egui } => egui.state.rotation(),
+        }
+    }
+
     pub fn ctx(&self) -> &egui::Context {
         match &self.backend {
             #[cfg(feature = "glow-backend")]
@@ -191,7 +234,7 @@ impl EguiWindow {
             #[cfg(feature = "glow-backend")]
             Backend::Glow { window, egui, .. } => egui.state.on_event(window, event),
             #[cfg(feature = "canvas-backend")]
-            Backend::Canvas { canvas, egui } => egui.state.on_event(canvas.window(), event),
+            Backend::Canvas { canvas, egui, .. } => egui.state.on_event(canvas.window(), event),
             #[cfg(feature = "canvas-backend")]
             Backend::CanvasBlit { canvas, egui, .. } => egui.state.on_event(canvas.window(), event),
             #[cfg(feature = "wgpu-backend")]
@@ -251,11 +294,20 @@ impl EguiWindow {
                 window.gl_swap_window();
             }
             #[cfg(feature = "canvas-backend")]
-            Backend::Canvas { canvas, egui } => {
-                canvas.set_draw_color(rgb(clear_color));
-                canvas.clear();
-                egui.paint(canvas);
-                canvas.present();
+            Backend::Canvas {
+                canvas,
+                egui,
+                turned,
+            } => {
+                let rotation = egui.state.rotation();
+                if rotation == Rotation::None {
+                    canvas.set_draw_color(rgb(clear_color));
+                    canvas.clear();
+                    egui.paint(canvas);
+                    canvas.present();
+                } else {
+                    paint_turned(canvas, egui, turned, rotation, clear_color);
+                }
             }
             #[cfg(feature = "canvas-backend")]
             Backend::CanvasBlit {
@@ -263,14 +315,19 @@ impl EguiWindow {
                 offscreen,
                 present,
                 size,
+                frame,
                 egui,
             } => {
                 // Rebuild on resize so surface, texture and window stay 1:1.
                 if canvas.output_size().is_ok_and(|s| s != *size) {
                     match rebuild_blit_targets(canvas) {
                         Ok((new_offscreen, new_present, new_size)) => {
+                            let rotation = egui.state.rotation();
                             egui.destroy();
                             *egui = crate::EguiCanvas::for_surface(canvas.window(), &new_offscreen);
+                            // The fresh state starts unturned; the window's turn
+                            // outlives the target it was being presented on.
+                            egui.state.set_rotation(rotation);
                             *offscreen = new_offscreen;
                             *present = new_present;
                             *size = new_size;
@@ -282,11 +339,23 @@ impl EguiWindow {
                 offscreen.set_draw_color(rgb(clear_color));
                 offscreen.clear();
                 egui.paint(offscreen);
+                let rotation = egui.state.rotation();
                 let surface = offscreen.surface();
                 let pitch = surface.pitch() as usize;
                 match surface.without_lock() {
+                    // The offscreen is square and egui painted into its top-left
+                    // corner, so the wider pitch is all SDL needs to pick an
+                    // unturned frame out of it. A turned one is copied out here
+                    // rather than rotated by the driver: this mode exists for
+                    // drivers that show a texture copy and little else.
                     Some(pixels) => {
-                        if let Err(e) = present.update(None, pixels, pitch) {
+                        let uploaded = if rotation == Rotation::None {
+                            present.update(None, pixels, pitch)
+                        } else {
+                            rotate_frame(rotation, pixels, pitch, *size, frame);
+                            present.update(None, frame, size.0 as usize * BYTES_PER_PIXEL)
+                        };
+                        if let Err(e) = uploaded {
                             log::error!("could not upload the offscreen frame: {e}");
                         }
                     }
@@ -308,7 +377,12 @@ impl EguiWindow {
             #[cfg(feature = "glow-backend")]
             Backend::Glow { egui, .. } => egui.destroy(),
             #[cfg(feature = "canvas-backend")]
-            Backend::Canvas { egui, .. } => egui.destroy(),
+            Backend::Canvas { egui, turned, .. } => {
+                egui.destroy();
+                if let Some(target) = turned.take() {
+                    unsafe { target.texture.destroy() }
+                }
+            }
             #[cfg(feature = "canvas-backend")]
             Backend::CanvasBlit { egui, .. } => egui.destroy(),
             #[cfg(feature = "wgpu-backend")]
@@ -414,7 +488,11 @@ fn build_canvas(
         .map_err(|e| e.to_string())?;
     log::debug!("SDL renderer driver: {}", canvas.info().name);
     let egui = crate::EguiCanvas::new(&canvas);
-    Ok(Backend::Canvas { canvas, egui })
+    Ok(Backend::Canvas {
+        canvas,
+        egui,
+        turned: None,
+    })
 }
 
 /// The offscreen surface, its presentation texture, and the size both cover.
@@ -428,8 +506,12 @@ type BlitTargets = (
 #[cfg(feature = "canvas-backend")]
 fn rebuild_blit_targets(canvas: &sdl2::render::WindowCanvas) -> Result<BlitTargets, String> {
     let size = canvas.output_size()?;
-    let surface =
-        sdl2::surface::Surface::new(size.0, size.1, crate::canvas::painter::PIXEL_FORMAT)?;
+    // Square, on the longer edge: a quarter turn lays the screen out as tall as
+    // the window is wide, and sizing the surface to the turn instead would mean
+    // rebuilding the renderer whenever the turn changed — which takes egui's
+    // textures with it. egui paints into the top-left corner either way.
+    let side = size.0.max(size.1);
+    let surface = sdl2::surface::Surface::new(side, side, crate::canvas::painter::PIXEL_FORMAT)?;
     let offscreen = sdl2::render::Canvas::from_surface(surface)?;
     let mut present = canvas
         .texture_creator()
@@ -460,6 +542,7 @@ fn build_canvas_blit(
         offscreen,
         present,
         size,
+        frame: Vec::new(),
         egui,
     })
 }
@@ -502,9 +585,210 @@ fn build_wgpu(
     Err("built without the wgpu-backend feature".to_string())
 }
 
+/// Where a turn is painted before it reaches the window: the window canvas has
+/// no offscreen of its own, and SDL cannot rotate what it draws directly.
+#[cfg(feature = "canvas-backend")]
+pub struct TurnedTarget {
+    /// Square, on the window's longer edge, so a change of turn fits without a
+    /// rebuild. egui paints into its top-left corner.
+    texture: sdl2::render::Texture,
+    /// The window size it was built for.
+    window: (u32, u32),
+}
+
+/// Paint egui into the turned target and copy that onto the window at an angle.
+/// One rotated copy per frame, which every accelerated driver does for free and
+/// SDL's own renderer has an exact path for at multiples of 90°.
+#[cfg(feature = "canvas-backend")]
+fn paint_turned(
+    canvas: &mut sdl2::render::WindowCanvas,
+    egui: &mut crate::EguiCanvas,
+    turned: &mut Option<TurnedTarget>,
+    rotation: Rotation,
+    clear_color: [f32; 4],
+) {
+    let window = match canvas.output_size() {
+        Ok(size) => size,
+        Err(e) => return log::error!("could not read the window size: {e}"),
+    };
+    if turned.as_ref().is_none_or(|t| t.window != window) {
+        let side = window.0.max(window.1);
+        match canvas.texture_creator().create_texture_target(
+            crate::canvas::painter::PIXEL_FORMAT,
+            side,
+            side,
+        ) {
+            Ok(mut texture) => {
+                // A whole frame replaces rather than blends, as in the blit path.
+                texture.set_blend_mode(sdl2::render::BlendMode::None);
+                if let Some(old) = turned.replace(TurnedTarget { texture, window }) {
+                    unsafe { old.texture.destroy() }
+                }
+            }
+            // Every accelerated driver has render targets, and so does SDL's own
+            // software renderer; a driver without them shows the frame unturned
+            // rather than nothing at all.
+            Err(e) => {
+                log::error!("could not build a {side}x{side} target to turn the frame in: {e}");
+                canvas.set_draw_color(rgb(clear_color));
+                canvas.clear();
+                egui.paint(canvas);
+                canvas.present();
+                return;
+            }
+        }
+    }
+    let Some(target) = turned.as_mut() else {
+        unreachable!("the target was just built, or was already the right size")
+    };
+
+    let painted = canvas.with_texture_canvas(&mut target.texture, |target| {
+        target.set_draw_color(rgb(clear_color));
+        target.clear();
+        egui.paint(target);
+    });
+    if let Err(e) = painted {
+        return log::error!("could not paint into the turned target: {e}");
+    }
+
+    // The frame egui laid out, in the corner of the square target, and where the
+    // turn lands it: SDL rotates a copy about the centre of its destination, so
+    // a turned frame placed centrally comes down over the whole window.
+    let (w, h) = if rotation.swaps_axes() {
+        (window.1, window.0)
+    } else {
+        window
+    };
+    let src = sdl2::rect::Rect::new(0, 0, w, h);
+    let dst = sdl2::rect::Rect::new(
+        (window.0 as i32 - w as i32) / 2,
+        (window.1 as i32 - h as i32) / 2,
+        w,
+        h,
+    );
+    canvas.set_draw_color(rgb(clear_color));
+    canvas.clear();
+    let copied = canvas.copy_ex(
+        &target.texture,
+        Some(src),
+        Some(dst),
+        rotation.degrees(),
+        None,
+        false,
+        false,
+    );
+    if let Err(e) = copied {
+        log::error!("could not present the turned frame: {e}");
+    }
+    canvas.present();
+}
+
+/// Copy the frame out of the square offscreen buffer turned, as a tight
+/// window-sized one. `src` holds the screen egui painted — as wide as the window
+/// is tall on a quarter turn — in the top-left corner of a buffer of `pitch`.
+#[cfg(feature = "canvas-backend")]
+fn rotate_frame(
+    rotation: Rotation,
+    src: &[u8],
+    pitch: usize,
+    window: (u32, u32),
+    dst: &mut Vec<u8>,
+) {
+    let (width, height) = (window.0 as usize, window.1 as usize);
+    let row = width * BYTES_PER_PIXEL;
+    if dst.len() != row * height {
+        dst.resize(row * height, 0);
+    }
+    // Walked by destination row, so the writes run straight through; on a
+    // quarter turn it is the reads that step down a column instead, which is the
+    // cheaper of the two to scatter.
+    for (y, line) in dst.chunks_exact_mut(row).enumerate() {
+        for (x, pixel) in line.chunks_exact_mut(BYTES_PER_PIXEL).enumerate() {
+            // Where this window pixel sits in the turned screen — the whole-pixel
+            // form of `Rotation::from_window`.
+            let (sx, sy) = match rotation {
+                Rotation::None => (x, y),
+                Rotation::Cw90 => (y, width - 1 - x),
+                Rotation::Cw180 => (width - 1 - x, height - 1 - y),
+                Rotation::Cw270 => (height - 1 - y, x),
+            };
+            let at = sy * pitch + sx * BYTES_PER_PIXEL;
+            pixel.copy_from_slice(&src[at..at + BYTES_PER_PIXEL]);
+        }
+    }
+}
+
 /// egui and GL take linear floats; SDL clears in 8-bit channels.
 #[cfg(feature = "canvas-backend")]
 fn rgb(color: [f32; 4]) -> sdl2::pixels::Color {
     let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
     sdl2::pixels::Color::RGB(byte(color[0]), byte(color[1]), byte(color[2]))
+}
+
+#[cfg(all(test, feature = "canvas-backend"))]
+mod tests {
+    use super::*;
+
+    /// A 3x2 window, so a quarter turn is visibly a different shape.
+    const WINDOW: (u32, u32) = (3, 2);
+
+    /// The screen for this turn, painted into the corner of a square buffer, one
+    /// value per pixel repeated across its channels.
+    fn painted(rotation: Rotation) -> (Vec<u8>, usize) {
+        let (w, h) = if rotation.swaps_axes() {
+            (WINDOW.1, WINDOW.0)
+        } else {
+            WINDOW
+        };
+        let side = WINDOW.0.max(WINDOW.1) as usize;
+        let pitch = side * BYTES_PER_PIXEL;
+        let mut buffer = vec![0u8; pitch * side];
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                let at = y * pitch + x * BYTES_PER_PIXEL;
+                buffer[at..at + BYTES_PER_PIXEL].fill((y * 10 + x) as u8);
+            }
+        }
+        (buffer, pitch)
+    }
+
+    /// One value per window pixel, row by row.
+    fn presented(rotation: Rotation) -> Vec<u8> {
+        let (src, pitch) = painted(rotation);
+        let mut frame = Vec::new();
+        rotate_frame(rotation, &src, pitch, WINDOW, &mut frame);
+        assert_eq!(
+            frame.len(),
+            WINDOW.0 as usize * WINDOW.1 as usize * BYTES_PER_PIXEL
+        );
+        frame
+            .chunks_exact(BYTES_PER_PIXEL)
+            .map(|pixel| {
+                assert!(pixel.iter().all(|b| *b == pixel[0]), "a pixel was torn");
+                pixel[0]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_unturned_frame_is_copied_across_as_it_is() {
+        assert_eq!(presented(Rotation::None), [0, 1, 2, 10, 11, 12]);
+    }
+
+    #[test]
+    fn a_quarter_turn_clockwise_stands_the_screen_up() {
+        // The screen is 2 wide and 3 tall:  0  1  ·  10 11  ·  20 21
+        // and comes down on the window as: 20 10 0  ·  21 11 1
+        assert_eq!(presented(Rotation::Cw90), [20, 10, 0, 21, 11, 1]);
+    }
+
+    #[test]
+    fn a_half_turn_reverses_both_axes() {
+        assert_eq!(presented(Rotation::Cw180), [12, 11, 10, 2, 1, 0]);
+    }
+
+    #[test]
+    fn a_quarter_turn_anticlockwise_is_the_other_way_round() {
+        assert_eq!(presented(Rotation::Cw270), [1, 11, 21, 0, 10, 20]);
+    }
 }

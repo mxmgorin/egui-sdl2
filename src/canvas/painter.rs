@@ -19,7 +19,7 @@ pub(crate) const PIXEL_FORMAT: PixelFormatEnum = PixelFormatEnum::ABGR8888;
 #[cfg(target_endian = "big")]
 pub(crate) const PIXEL_FORMAT: PixelFormatEnum = PixelFormatEnum::RGBA8888;
 
-const BYTES_PER_PIXEL: usize = 4;
+pub(crate) const BYTES_PER_PIXEL: usize = 4;
 
 /// An Canvas painter using [`sdl2`].
 ///
