@@ -19,10 +19,7 @@ fn painted_centre(format: PixelFormatEnum) -> [u8; 4] {
     let mut painter = Painter::for_surface_with_format(&canvas, format);
 
     let ctx = egui::Context::default();
-    let screen = egui::Rect::from_min_size(
-        egui::Pos2::ZERO,
-        egui::vec2(SIDE as f32, SIDE as f32),
-    );
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(SIDE as f32, SIDE as f32));
     let input = egui::RawInput {
         screen_rect: Some(screen),
         ..Default::default()
