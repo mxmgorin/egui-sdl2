@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The canvas backend's pixel format is configurable: `Painter::with_format`,
+  `Painter::for_surface_with_format` and the matching `EguiCanvas` constructors
+  take one, `Painter::format` reports it, and `preferred_format` names the one a
+  renderer holds natively. egui's pixels are shuffled into it on upload.
+
+### Changed
+
+- The canvas backend takes its format from the renderer rather than always
+  asking for `ABGR8888`, which is still the first choice — egui's own pixels are
+  already in it. A renderer without it (the Miyoo Mini's offers `RGB565` and
+  `ARGB8888`) converted on every upload instead, which under
+  `Renderer::CanvasBlit` is the whole frame, every frame.
+
 ## [0.10.0] - 2026-08-11
 
 ### Added

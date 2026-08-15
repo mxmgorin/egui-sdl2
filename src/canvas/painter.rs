@@ -14,12 +14,53 @@ use sdl2::video::{Window, WindowContext};
 use std::collections::HashMap;
 use std::os::raw::c_int;
 
+/// The format egui's own pixels are already in: an upload into it is a copy.
 #[cfg(target_endian = "little")]
-pub(crate) const PIXEL_FORMAT: PixelFormatEnum = PixelFormatEnum::ABGR8888;
+pub const DEFAULT_FORMAT: PixelFormatEnum = PixelFormatEnum::ABGR8888;
+/// The format egui's own pixels are already in: an upload into it is a copy.
 #[cfg(target_endian = "big")]
-pub(crate) const PIXEL_FORMAT: PixelFormatEnum = PixelFormatEnum::RGBA8888;
+pub const DEFAULT_FORMAT: PixelFormatEnum = PixelFormatEnum::RGBA8888;
 
 pub(crate) const BYTES_PER_PIXEL: usize = 4;
+
+/// The format to paint in for `canvas`: [`DEFAULT_FORMAT`] where the renderer
+/// takes it, otherwise the first 32-bit format with alpha it lists. A format the
+/// renderer lacks is converted on every upload, whole-frame under
+/// [`crate::Renderer::CanvasBlit`]; a shuffle per atlas change is the cheaper end.
+pub fn preferred_format<T: RenderTarget>(canvas: &Canvas<T>) -> PixelFormatEnum {
+    let formats = canvas.info().texture_formats;
+    if formats.contains(&DEFAULT_FORMAT) {
+        return DEFAULT_FORMAT;
+    }
+    formats
+        .into_iter()
+        .find(|&format| channel_offsets(format).is_some())
+        .unwrap_or(DEFAULT_FORMAT)
+}
+
+/// Byte offsets of R, G, B and A within a pixel of `format`, the order an upload
+/// writes them in. `None` unless the format is 32-bit with alpha.
+fn channel_offsets(format: PixelFormatEnum) -> Option<[usize; BYTES_PER_PIXEL]> {
+    let masks = format.into_masks().ok()?;
+    if masks.bpp as usize != BYTES_PER_PIXEL * 8 || masks.amask == 0 {
+        return None;
+    }
+    // A mask names bits of the pixel word, whose low byte is first only on LE.
+    let offset = |mask: u32| {
+        let byte = (mask.trailing_zeros() / 8) as usize;
+        if cfg!(target_endian = "little") {
+            byte
+        } else {
+            BYTES_PER_PIXEL - 1 - byte
+        }
+    };
+    Some([
+        offset(masks.rmask),
+        offset(masks.gmask),
+        offset(masks.bmask),
+        offset(masks.amask),
+    ])
+}
 
 /// An Canvas painter using [`sdl2`].
 ///
@@ -49,13 +90,22 @@ pub struct Painter<C = WindowContext> {
     pixel_scratch: Vec<u8>,
     /// This renderer's texture size limit, for egui to lay its atlas out within.
     max_texture_side: Option<usize>,
+    /// The format egui's textures are held in.
+    format: PixelFormatEnum,
+    /// `format`'s channel order, resolved once for the uploads.
+    channels: [usize; BYTES_PER_PIXEL],
 }
 
 impl Painter<WindowContext> {
     /// Textures are created from `canvas`'s renderer, so pass the same canvas to
-    /// the paint calls.
+    /// the paint calls. Paints in [`preferred_format`] for that renderer.
     pub fn new(canvas: &Canvas<Window>) -> Self {
-        Self::with_creator(canvas.texture_creator(), max_texture_side(canvas))
+        Self::with_format(canvas, preferred_format(canvas))
+    }
+
+    /// [`Self::new`] in a format of the caller's choosing.
+    pub fn with_format(canvas: &Canvas<Window>, format: PixelFormatEnum) -> Self {
+        Self::with_creator(canvas.texture_creator(), max_texture_side(canvas), format)
     }
 }
 
@@ -63,12 +113,34 @@ impl<'s> Painter<SurfaceContext<'s>> {
     /// Paint into a surface instead of a window, for drivers that only present
     /// texture copies (see [`crate::Renderer::CanvasBlit`]).
     pub fn for_surface(canvas: &Canvas<Surface<'s>>) -> Self {
-        Self::with_creator(canvas.texture_creator(), max_texture_side(canvas))
+        Self::for_surface_with_format(canvas, preferred_format(canvas))
+    }
+
+    /// [`Self::for_surface`] in a format of the caller's choosing. Give it the
+    /// surface's own and the presenting window's, and the frame travels as bytes.
+    pub fn for_surface_with_format(canvas: &Canvas<Surface<'s>>, format: PixelFormatEnum) -> Self {
+        Self::with_creator(canvas.texture_creator(), max_texture_side(canvas), format)
     }
 }
 
 impl<C> Painter<C> {
-    fn with_creator(texture_creator: TextureCreator<C>, max_texture_side: Option<usize>) -> Self {
+    fn with_creator(
+        texture_creator: TextureCreator<C>,
+        max_texture_side: Option<usize>,
+        format: PixelFormatEnum,
+    ) -> Self {
+        // Painting in a format no egui texture fits would show as a blank UI.
+        let (format, channels) = match channel_offsets(format) {
+            Some(channels) => (format, channels),
+            None => {
+                log::warn!(
+                    "{format:?} cannot hold an egui texture; painting in {DEFAULT_FORMAT:?}"
+                );
+                let channels = channel_offsets(DEFAULT_FORMAT)
+                    .expect("the default format is 32-bit with alpha by construction");
+                (DEFAULT_FORMAT, channels)
+            }
+        };
         Self {
             textures: HashMap::new(),
             texture_creator,
@@ -77,7 +149,15 @@ impl<C> Painter<C> {
             pixel_scratch: Vec::new(),
             last_clip: None,
             max_texture_side,
+            format,
+            channels,
         }
+    }
+
+    /// The format egui's textures are held in — what a surface or a presentation
+    /// texture built around this painter should also be.
+    pub fn format(&self) -> PixelFormatEnum {
+        self.format
     }
 
     /// The largest texture this renderer accepts, `None` if it reports no limit.
@@ -169,9 +249,22 @@ impl<C> Painter<C> {
         self.pixel_scratch.clear();
         self.pixel_scratch
             .reserve(img.pixels.len() * BYTES_PER_PIXEL);
-        for pixel in img.pixels.iter() {
-            self.pixel_scratch
-                .extend_from_slice(&pixel.to_srgba_unmultiplied());
+        let [r_at, g_at, b_at, a_at] = self.channels;
+        if self.channels == [0, 1, 2, 3] {
+            for pixel in img.pixels.iter() {
+                self.pixel_scratch
+                    .extend_from_slice(&pixel.to_srgba_unmultiplied());
+            }
+        } else {
+            for pixel in img.pixels.iter() {
+                let [r, g, b, a] = pixel.to_srgba_unmultiplied();
+                let mut texel = [0u8; BYTES_PER_PIXEL];
+                texel[r_at] = r;
+                texel[g_at] = g;
+                texel[b_at] = b;
+                texel[a_at] = a;
+                self.pixel_scratch.extend_from_slice(&texel);
+            }
         }
         let w = img.width() as u32;
         let h = img.height() as u32;
@@ -186,10 +279,11 @@ impl<C> Painter<C> {
             }
         }
 
+        let format = self.format;
         let tex = self
             .textures
             .entry(id)
-            .or_insert_with(|| create_texture(&self.texture_creator, w, h));
+            .or_insert_with(|| create_texture(&self.texture_creator, w, h, format));
         let rect = delta.pos.map(|[x, y]| Rect::new(x as i32, y as i32, w, h));
         tex.update(rect, &self.pixel_scratch, pitch).unwrap();
     }
@@ -437,9 +531,14 @@ fn max_texture_side<T: RenderTarget>(canvas: &Canvas<T>) -> Option<usize> {
 }
 
 #[inline]
-fn create_texture<C>(texture_creator: &TextureCreator<C>, w: u32, h: u32) -> Texture {
+fn create_texture<C>(
+    texture_creator: &TextureCreator<C>,
+    w: u32,
+    h: u32,
+    format: PixelFormatEnum,
+) -> Texture {
     let mut tex = texture_creator
-        .create_texture_streaming(PIXEL_FORMAT, w, h) // ABGR8888 on Little-Endian
+        .create_texture_streaming(format, w, h)
         .unwrap_or_else(|e| {
             // Reached only if egui asked for more than the renderer's limit,
             // which `Painter::max_texture_side` exists to prevent — so the
@@ -468,5 +567,40 @@ fn into_sdl_vertex(vertex: &egui::epaint::Vertex, pixels_per_point: f32) -> SDL_
             x: vertex.uv.x,
             y: vertex.uv.y,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_default_format_takes_egui_bytes_as_they_come() {
+        assert_eq!(channel_offsets(DEFAULT_FORMAT), Some([0, 1, 2, 3]));
+    }
+
+    #[test]
+    fn a_channel_order_is_the_format_s_own() {
+        // BGRA in memory, which is what the Miyoo Mini's driver holds.
+        assert_eq!(
+            channel_offsets(PixelFormatEnum::ARGB8888),
+            Some([2, 1, 0, 3])
+        );
+        assert_eq!(
+            channel_offsets(PixelFormatEnum::BGRA8888),
+            Some([1, 2, 3, 0])
+        );
+    }
+
+    #[test]
+    fn nothing_short_of_32_bit_with_alpha_holds_a_texture() {
+        for format in [
+            PixelFormatEnum::RGB565,
+            PixelFormatEnum::RGB24,
+            PixelFormatEnum::RGBX8888,
+            PixelFormatEnum::YV12,
+        ] {
+            assert_eq!(channel_offsets(format), None, "{format:?}");
+        }
     }
 }

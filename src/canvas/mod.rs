@@ -42,6 +42,11 @@ impl EguiCanvas<WindowContext> {
         Self::assemble(canvas.window(), Painter::new(canvas))
     }
 
+    /// [`Self::new`] painting in `format` (see [`Painter::with_format`]).
+    pub fn with_format(canvas: &Canvas<Window>, format: sdl2::pixels::PixelFormatEnum) -> Self {
+        Self::assemble(canvas.window(), Painter::with_format(canvas, format))
+    }
+
     #[inline]
     pub fn on_event(
         &mut self,
@@ -57,6 +62,16 @@ impl<'s> EguiCanvas<SurfaceContext<'s>> {
     /// texture copies. Input and sizing still come from `window`.
     pub fn for_surface(window: &Window, canvas: &Canvas<Surface<'s>>) -> Self {
         Self::assemble(window, Painter::for_surface(canvas))
+    }
+
+    /// [`Self::for_surface`] painting in `format` (see
+    /// [`Painter::for_surface_with_format`]).
+    pub fn for_surface_with_format(
+        window: &Window,
+        canvas: &Canvas<Surface<'s>>,
+        format: sdl2::pixels::PixelFormatEnum,
+    ) -> Self {
+        Self::assemble(window, Painter::for_surface_with_format(canvas, format))
     }
 }
 

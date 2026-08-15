@@ -320,11 +320,16 @@ impl EguiWindow {
             } => {
                 // Rebuild on resize so surface, texture and window stay 1:1.
                 if canvas.output_size().is_ok_and(|s| s != *size) {
-                    match rebuild_blit_targets(canvas) {
+                    let format = egui.painter.format();
+                    match rebuild_blit_targets(canvas, format) {
                         Ok((new_offscreen, new_present, new_size)) => {
                             let rotation = egui.state.rotation();
                             egui.destroy();
-                            *egui = crate::EguiCanvas::for_surface(canvas.window(), &new_offscreen);
+                            *egui = crate::EguiCanvas::for_surface_with_format(
+                                canvas.window(),
+                                &new_offscreen,
+                                format,
+                            );
                             // The fresh state starts unturned; the window's turn
                             // outlives the target it was being presented on.
                             egui.state.set_rotation(rotation);
@@ -504,18 +509,21 @@ type BlitTargets = (
 );
 
 #[cfg(feature = "canvas-backend")]
-fn rebuild_blit_targets(canvas: &sdl2::render::WindowCanvas) -> Result<BlitTargets, String> {
+fn rebuild_blit_targets(
+    canvas: &sdl2::render::WindowCanvas,
+    format: sdl2::pixels::PixelFormatEnum,
+) -> Result<BlitTargets, String> {
     let size = canvas.output_size()?;
     // Square, on the longer edge: a quarter turn lays the screen out as tall as
     // the window is wide, and sizing the surface to the turn instead would mean
     // rebuilding the renderer whenever the turn changed — which takes egui's
     // textures with it. egui paints into the top-left corner either way.
     let side = size.0.max(size.1);
-    let surface = sdl2::surface::Surface::new(side, side, crate::canvas::painter::PIXEL_FORMAT)?;
+    let surface = sdl2::surface::Surface::new(side, side, format)?;
     let offscreen = sdl2::render::Canvas::from_surface(surface)?;
     let mut present = canvas
         .texture_creator()
-        .create_texture_streaming(crate::canvas::painter::PIXEL_FORMAT, size.0, size.1)
+        .create_texture_streaming(format, size.0, size.1)
         .map_err(|e| e.to_string())?;
     // A whole frame replaces rather than blends. SDL gives a format with alpha
     // `BLEND` by default, which would dim any pixel the offscreen renderer left
@@ -535,8 +543,11 @@ fn build_canvas_blit(
     // asking excludes those that don't.
     let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
     log::debug!("SDL renderer driver: {} (blit)", canvas.info().name);
-    let (offscreen, present, size) = rebuild_blit_targets(&canvas)?;
-    let egui = crate::EguiCanvas::for_surface(canvas.window(), &offscreen);
+    // The window's renderer decides: the whole frame crosses to it every frame.
+    let format = crate::canvas::painter::preferred_format(&canvas);
+    log::debug!("blit format: {format:?}");
+    let (offscreen, present, size) = rebuild_blit_targets(&canvas, format)?;
+    let egui = crate::EguiCanvas::for_surface_with_format(canvas.window(), &offscreen, format);
     Ok(Backend::CanvasBlit {
         canvas,
         offscreen,
@@ -613,11 +624,10 @@ fn paint_turned(
     };
     if turned.as_ref().is_none_or(|t| t.window != window) {
         let side = window.0.max(window.1);
-        match canvas.texture_creator().create_texture_target(
-            crate::canvas::painter::PIXEL_FORMAT,
-            side,
-            side,
-        ) {
+        match canvas
+            .texture_creator()
+            .create_texture_target(egui.painter.format(), side, side)
+        {
             Ok(mut texture) => {
                 // A whole frame replaces rather than blends, as in the blit path.
                 texture.set_blend_mode(sdl2::render::BlendMode::None);
