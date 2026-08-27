@@ -83,6 +83,8 @@ pub struct Painter<C = WindowContext> {
     /// Reset to `None` at the start of each run because the caller draws to the
     /// same canvas between runs.
     last_clip: Option<Rect>,
+    /// The area this run may write, from [`Painter::paint_primitives_within`].
+    damage: Option<Rect>,
     /// Triangles waiting to be drawn, so a run of them is still one SDL call.
     index_scratch: Vec<u32>,
     /// Reused for the straight-alpha copy an upload needs; the atlas is uploaded
@@ -148,6 +150,7 @@ impl<C> Painter<C> {
             index_scratch: Vec::new(),
             pixel_scratch: Vec::new(),
             last_clip: None,
+            damage: None,
             max_texture_side,
             format,
             channels,
@@ -212,9 +215,25 @@ impl<C> Painter<C> {
         pixels_per_point: f32,
         paint_jobs: Vec<ClippedPrimitive>,
     ) {
+        self.paint_primitives_within(canvas, pixels_per_point, paint_jobs, None)
+    }
+
+    /// [`Self::paint_primitives`] confined to `damage` (in pixels): a mesh
+    /// outside it is dropped before it reaches the renderer, and one crossing its
+    /// edge is clipped to it. For a caller repainting the part of a frame that
+    /// changed — on a software renderer the pixels are the cost, and most frames
+    /// change few of them.
+    pub fn paint_primitives_within<T: RenderTarget<Context = C>>(
+        &mut self,
+        canvas: &mut Canvas<T>,
+        pixels_per_point: f32,
+        paint_jobs: Vec<ClippedPrimitive>,
+        damage: Option<Rect>,
+    ) {
         // The caller may have drawn to the canvas (and changed its clip) since
         // the last run, so don't assume any clip is still applied.
         self.last_clip = None;
+        self.damage = damage;
         // Untextured geometry and rectangle fills blend by the renderer's mode,
         // which SDL leaves at `None` — so a half-transparent fill would overwrite
         // instead of blending. Textures carry their own mode (`create_texture`).
@@ -322,6 +341,14 @@ impl<C> Painter<C> {
             (max.x - min.x) as u32,
             (max.y - min.y) as u32,
         );
+        // Confined to the damaged area, and dropped when it falls outside it.
+        let clip_rect = match self.damage {
+            Some(damage) => match clip_rect.intersection(damage) {
+                Some(clipped) => clipped,
+                None => return,
+            },
+            None => clip_rect,
+        };
         // Adjacent meshes (e.g. all glyphs in one panel) usually share a clip;
         // only hit `SDL_RenderSetClipRect` when it actually changes.
         if self.last_clip != Some(clip_rect) {
