@@ -30,7 +30,10 @@ use sdl2::video::{Window, WindowContext};
 /// `C` is the render target's context: a window's by default, a surface's when
 /// painting offscreen (see [`EguiCanvas::for_target`]).
 pub struct EguiCanvas<C = WindowContext> {
-    run_output: crate::EguiRunOutput,
+    /// The last [`Self::run`]'s output, for a caller that paints it in steps of
+    /// its own — timing them apart, or holding a rasterized frame back to reuse.
+    /// [`Self::paint`] does the whole of it in one call.
+    pub run_output: crate::EguiRunOutput,
     pub ctx: egui::Context,
     pub state: crate::State,
     pub painter: Painter<C>,
