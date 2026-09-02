@@ -713,7 +713,12 @@ fn rotate_frame(
     // quarter turn it is the reads that step down a column instead, which is the
     // cheaper of the two to scatter.
     for (y, line) in dst.chunks_exact_mut(row).enumerate() {
-        for (x, pixel) in line.chunks_exact_mut(BYTES_PER_PIXEL).enumerate() {
+        for (x, pixel) in line
+            .as_chunks_mut::<BYTES_PER_PIXEL>()
+            .0
+            .iter_mut()
+            .enumerate()
+        {
             // Where this window pixel sits in the turned screen — the whole-pixel
             // form of `Rotation::from_window`.
             let (sx, sy) = match rotation {
@@ -772,7 +777,9 @@ mod tests {
             WINDOW.0 as usize * WINDOW.1 as usize * BYTES_PER_PIXEL
         );
         frame
-            .chunks_exact(BYTES_PER_PIXEL)
+            .as_chunks::<BYTES_PER_PIXEL>()
+            .0
+            .iter()
             .map(|pixel| {
                 assert!(pixel.iter().all(|b| *b == pixel[0]), "a pixel was torn");
                 pixel[0]

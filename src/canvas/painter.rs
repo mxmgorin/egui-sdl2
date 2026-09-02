@@ -407,7 +407,7 @@ impl<C> Painter<C> {
         // triangle's own hue the ramp stays on colour — antialiasing, not a
         // dark fringe. Corners are only shared within one path, so a triangle
         // may safely write the hue its path owns.
-        for triangle in self.index_scratch.chunks_exact(3) {
+        for triangle in self.index_scratch.as_chunks::<3>().0 {
             let hue = triangle
                 .iter()
                 .map(|&i| self.vertex_scratch[i as usize].color)
