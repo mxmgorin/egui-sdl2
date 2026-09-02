@@ -474,7 +474,8 @@ impl Quad {
                     w: (self.uv.width() * tw).round() as i32,
                     h: (self.uv.height() * th).round() as i32,
                 };
-                sdl2_sys::SDL_RenderCopyF(canvas.raw(), texture_ptr, &src, &self.dst)
+                let dst = unscaled_onto_pixels(&self.dst, &src);
+                sdl2_sys::SDL_RenderCopyF(canvas.raw(), texture_ptr, &src, &dst)
             },
             _ => unsafe {
                 sdl2_sys::SDL_SetRenderDrawColor(canvas.raw(), r, g, b, a);
@@ -484,6 +485,28 @@ impl Quad {
         if result != 0 {
             log::error!("blitting a quad failed: {result}");
         }
+    }
+}
+
+/// A copy of the source's own size, landed on whole pixels. `src` is whole
+/// texels, so a fractional `dst` makes SDL resample a 1:1 copy and drop a row
+/// or a column of it — a glyph loses the crossbar of an H, the arm of an F, the
+/// middle of an S. Anything genuinely scaled keeps the rect it asked for.
+fn unscaled_onto_pixels(
+    dst: &sdl2_sys::SDL_FRect,
+    src: &sdl2_sys::SDL_Rect,
+) -> sdl2_sys::SDL_FRect {
+    /// How far a copy may sit from the source's size and still be one.
+    const UNSCALED: f32 = 0.5;
+    let (w, h) = (src.w as f32, src.h as f32);
+    if (dst.w - w).abs() > UNSCALED || (dst.h - h).abs() > UNSCALED {
+        return *dst;
+    }
+    sdl2_sys::SDL_FRect {
+        x: dst.x.round(),
+        y: dst.y.round(),
+        w,
+        h,
     }
 }
 
@@ -617,6 +640,49 @@ mod tests {
             channel_offsets(PixelFormatEnum::BGRA8888),
             Some([1, 2, 3, 0])
         );
+    }
+
+    /// A glyph at a fractional zoom: the quad is the source's size but lands
+    /// between pixels, and the row SDL would drop is a crossbar.
+    #[test]
+    fn an_unscaled_copy_lands_on_whole_pixels() {
+        let src = sdl2_sys::SDL_Rect {
+            x: 0,
+            y: 0,
+            w: 9,
+            h: 14,
+        };
+        let dst = sdl2_sys::SDL_FRect {
+            x: 134.62,
+            y: 87.25,
+            w: 9.0,
+            h: 13.75,
+        };
+        let snapped = unscaled_onto_pixels(&dst, &src);
+        assert_eq!(
+            (snapped.x, snapped.y, snapped.w, snapped.h),
+            (135.0, 87.0, 9.0, 14.0)
+        );
+    }
+
+    /// An image asked for at a size of its own keeps it; only a copy that was
+    /// already 1:1 is snapped.
+    #[test]
+    fn a_scaled_copy_keeps_the_rect_it_asked_for() {
+        let src = sdl2_sys::SDL_Rect {
+            x: 0,
+            y: 0,
+            w: 64,
+            h: 64,
+        };
+        let dst = sdl2_sys::SDL_FRect {
+            x: 10.5,
+            y: 20.5,
+            w: 128.0,
+            h: 128.0,
+        };
+        let kept = unscaled_onto_pixels(&dst, &src);
+        assert_eq!((kept.x, kept.y, kept.w, kept.h), (10.5, 20.5, 128.0, 128.0));
     }
 
     #[test]
