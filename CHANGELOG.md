@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-02
+
+### Added
+
+- `Painter::paint_primitives_within` paints only the damaged part of a frame,
+  for a caller that knows what changed since the last one.
+- `EguiCanvas::run_output` is public, for a caller that paints a frame in steps
+  of its own rather than through `EguiCanvas::paint`.
+
+### Fixed
+
+- The canvas backend lands an unscaled texture copy on whole pixels. The source
+  rect is whole texels, so a fractional destination had SDL resample a 1:1 copy
+  and drop a row or a column of it — at a fractional zoom a glyph lost the
+  crossbar of an H, the arm of an F, the middle of an S.
+
 ## [0.11.0] - 2026-08-15
 
 ### Added
@@ -189,7 +205,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.8.2...v0.9.0
