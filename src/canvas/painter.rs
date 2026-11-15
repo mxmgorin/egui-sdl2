@@ -470,18 +470,13 @@ impl Quad {
                 // what the triangle path does per vertex.
                 sdl2_sys::SDL_SetTextureColorMod(texture_ptr, r, g, b);
                 sdl2_sys::SDL_SetTextureAlphaMod(texture_ptr, a);
-                let src = sdl2_sys::SDL_Rect {
-                    x: (self.uv.min.x * tw).round() as i32,
-                    y: (self.uv.min.y * th).round() as i32,
-                    w: (self.uv.width() * tw).round() as i32,
-                    h: (self.uv.height() * th).round() as i32,
-                };
+                let src = texels(self.uv, tw, th);
                 let dst = unscaled_onto_pixels(&self.dst, &src);
                 sdl2_sys::SDL_RenderCopyF(canvas.raw(), texture_ptr, &src, &dst)
             },
             _ => unsafe {
                 sdl2_sys::SDL_SetRenderDrawColor(canvas.raw(), r, g, b, a);
-                sdl2_sys::SDL_RenderFillRectF(canvas.raw(), &self.dst)
+                sdl2_sys::SDL_RenderFillRectF(canvas.raw(), &edges_onto_pixels(&self.dst))
             },
         };
         if result != 0 {
@@ -493,7 +488,7 @@ impl Quad {
 /// A copy of the source's own size, landed on whole pixels. `src` is whole
 /// texels, so a fractional `dst` makes SDL resample a 1:1 copy and drop a row
 /// or a column of it — a glyph loses the crossbar of an H, the arm of an F, the
-/// middle of an S. Anything genuinely scaled keeps the rect it asked for.
+/// middle of an S. Anything genuinely scaled lands as [`edges_onto_pixels`] puts it.
 fn unscaled_onto_pixels(
     dst: &sdl2_sys::SDL_FRect,
     src: &sdl2_sys::SDL_Rect,
@@ -502,13 +497,44 @@ fn unscaled_onto_pixels(
     const UNSCALED: f32 = 0.5;
     let (w, h) = (src.w as f32, src.h as f32);
     if (dst.w - w).abs() > UNSCALED || (dst.h - h).abs() > UNSCALED {
-        return *dst;
+        return edges_onto_pixels(dst);
     }
     sdl2_sys::SDL_FRect {
         x: dst.x.round(),
         y: dst.y.round(),
         w,
         h,
+    }
+}
+
+/// `rect` on whole pixels, each edge truncated on its own, a pixel at the least:
+/// rects that meet still meet, where SDL truncates position and size apart.
+fn edges_onto_pixels(rect: &sdl2_sys::SDL_FRect) -> sdl2_sys::SDL_FRect {
+    /// How far short of a pixel boundary an edge may fall and still be on it.
+    const ON_EDGE: f32 = 1.0 / 16.0;
+    // As SDL truncates a vertex, so a blit lines up with the feathering around it.
+    let pixel_edge = |edge: f32| (edge + ON_EDGE).floor();
+    let (left, top) = (pixel_edge(rect.x), pixel_edge(rect.y));
+    let right = pixel_edge(rect.x + rect.w).max(left + 1.0);
+    let bottom = pixel_edge(rect.y + rect.h).max(top + 1.0);
+    sdl2_sys::SDL_FRect {
+        x: left,
+        y: top,
+        w: right - left,
+        h: bottom - top,
+    }
+}
+
+/// The texels `uv` covers in a `tw` by `th` texture, each edge rounded to the
+/// nearest one: pieces of a texture that meet in uv meet in texels.
+fn texels(uv: egui::Rect, tw: f32, th: f32) -> sdl2_sys::SDL_Rect {
+    let min = egui::pos2(uv.min.x * tw, uv.min.y * th).round();
+    let max = egui::pos2(uv.max.x * tw, uv.max.y * th).round();
+    sdl2_sys::SDL_Rect {
+        x: min.x as i32,
+        y: min.y as i32,
+        w: (max.x - min.x) as i32,
+        h: (max.y - min.y) as i32,
     }
 }
 
@@ -684,10 +710,9 @@ mod tests {
         );
     }
 
-    /// An image asked for at a size of its own keeps it; only a copy that was
-    /// already 1:1 is snapped.
+    /// An image asked for at a size of its own keeps its far edge where it asked.
     #[test]
-    fn a_scaled_copy_keeps_the_rect_it_asked_for() {
+    fn a_scaled_copy_keeps_its_far_edge() {
         let src = sdl2_sys::SDL_Rect {
             x: 0,
             y: 0,
@@ -695,13 +720,97 @@ mod tests {
             h: 64,
         };
         let dst = sdl2_sys::SDL_FRect {
-            x: 10.5,
-            y: 20.5,
-            w: 128.0,
+            x: 10.6,
+            y: 20.6,
+            w: 127.6,
             h: 128.0,
         };
         let kept = unscaled_onto_pixels(&dst, &src);
-        assert_eq!((kept.x, kept.y, kept.w, kept.h), (10.5, 20.5, 128.0, 128.0));
+        assert_eq!((kept.x, kept.y, kept.w, kept.h), (10.0, 20.0, 128.0, 128.0));
+    }
+
+    /// A run of three QR modules at a fractional zoom ends a hair short of the
+    /// pixel the next run starts on; the seam between them stays shut.
+    #[test]
+    fn fills_that_meet_still_meet_on_whole_pixels() {
+        let zoom = 1.1;
+        let module = 4.0 / zoom;
+        let run = egui::Rect::from_min_size(
+            egui::pos2(521.0 / zoom, 10.0),
+            egui::vec2(3.0 * module, module),
+        );
+        let next = egui::Rect::from_min_size(run.right_top(), egui::vec2(module, module));
+        let in_pixels = |r: egui::Rect| {
+            edges_onto_pixels(&sdl2_sys::SDL_FRect {
+                x: r.min.x * zoom,
+                y: r.min.y * zoom,
+                w: r.width() * zoom,
+                h: r.height() * zoom,
+            })
+        };
+        let (a, b) = (in_pixels(run), in_pixels(next));
+        assert!(
+            run.width() * zoom < 12.0,
+            "the run must fall short to test the seam"
+        );
+        assert_eq!((a.x, a.w), (521.0, 12.0));
+        assert_eq!(b.x, a.x + a.w);
+    }
+
+    /// A feathered fill's inner rect sits half a pixel in from each edge; it lands
+    /// where SDL puts the vertices of the feather around it.
+    #[test]
+    fn a_half_way_edge_goes_down() {
+        let inner = sdl2_sys::SDL_FRect {
+            x: 0.5,
+            y: 0.5,
+            w: 299.0,
+            h: 479.0,
+        };
+        let drawn = edges_onto_pixels(&inner);
+        assert_eq!(
+            (drawn.x, drawn.y, drawn.x + drawn.w, drawn.y + drawn.h),
+            (0.0, 0.0, 299.0, 479.0)
+        );
+    }
+
+    /// A rect thinner than a pixel still draws one.
+    #[test]
+    fn a_hairline_fill_keeps_a_pixel() {
+        let thin = sdl2_sys::SDL_FRect {
+            x: 3.0,
+            y: 10.6,
+            w: 40.0,
+            h: 0.6,
+        };
+        let drawn = edges_onto_pixels(&thin);
+        assert_eq!((drawn.y, drawn.h), (10.0, 1.0));
+    }
+
+    /// Strips of one glyph, each a fraction of a texel tall: their sources tile
+    /// the glyph with no texel twice and none skipped.
+    #[test]
+    fn pieces_of_a_texture_tile_its_texels() {
+        let (tw, th) = (512.0, 256.0);
+        let (top, rows, strips) = (40.0, 16.0, 11);
+        let piece = |i: usize| {
+            let v = |k: usize| (top + rows * k as f32 / strips as f32) / th;
+            texels(
+                egui::Rect::from_min_max(
+                    egui::pos2(8.0 / tw, v(i)),
+                    egui::pos2(17.0 / tw, v(i + 1)),
+                ),
+                tw,
+                th,
+            )
+        };
+        let mut next = top as i32;
+        for i in 0..strips {
+            let src = piece(i);
+            assert_eq!(src.y, next, "strip {i}");
+            next = src.y + src.h;
+        }
+        assert_eq!(next, (top + rows) as i32);
     }
 
     /// A clip at a fractional zoom keeps the row its far edge rounds to.

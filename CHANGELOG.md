@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The canvas backend lands blitted rectangles and scaled texture copies on whole
+  pixels edge by edge; at a fractional zoom, rectangles that meet no longer leave
+  a one-pixel seam on SDL2's software renderer.
+- The canvas backend takes the texels of a piece of texture edge by edge; pieces
+  of one texture that meet no longer skip or repeat a row.
+
 ## [0.12.1] - 2026-10-18
 
 ### Fixed
