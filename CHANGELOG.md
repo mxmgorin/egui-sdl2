@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-11-15
+
 ### Fixed
 
 - The canvas backend lands blitted rectangles and scaled texture copies on whole
@@ -222,7 +224,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.10.0...v0.11.0
