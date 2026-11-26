@@ -14,6 +14,28 @@ struct SurfaceState {
     height: u32,
 }
 
+/// Settles a frame on every way out of painting it, skipped frames included.
+///
+/// Submits the queued writes if nothing else did, then frees textures, which commands may still use.
+struct FrameGuard<'a> {
+    render_state: &'a RenderState,
+    free: Vec<egui::TextureId>,
+    submitted: bool,
+}
+
+impl Drop for FrameGuard<'_> {
+    fn drop(&mut self) {
+        if !self.submitted {
+            // Unsubmitted writes otherwise pile up in the queue while frames are skipped.
+            self.render_state.queue.submit([]);
+        }
+        let mut renderer = self.render_state.renderer.write();
+        for id in &self.free {
+            renderer.free_texture(id);
+        }
+    }
+}
+
 /// Everything you need to paint egui with [`wgpu`](https://docs.rs/wgpu) on [`sdl2`].
 pub struct Painter {
     context: egui::Context,
@@ -281,7 +303,7 @@ impl Painter {
         let capture = !capture_data.is_empty();
         let mut vsync_sec = 0.0;
 
-        let Some(render_state) = self.render_state.as_mut() else {
+        let Some(render_state) = self.render_state.as_ref() else {
             // Nothing to apply the deltas to; dropping them unapplied would
             // trip egui 0.36's drop check.
             textures_delta.clear();
@@ -290,6 +312,11 @@ impl Painter {
         let Some(surface_state) = self.surfaces.get(&viewport_id) else {
             textures_delta.clear();
             return vsync_sec;
+        };
+        let mut frame = FrameGuard {
+            render_state,
+            free: textures_delta.free.drain().collect(),
+            submitted: false,
         };
 
         let mut encoder = render_state.device.create_command_encoder(
@@ -467,16 +494,8 @@ impl Painter {
                 .submit(user_cmd_bufs.into_iter().chain([encoded]));
             vsync_sec += start.elapsed().as_secs_f32();
         };
-
-        // Free textures marked for destruction **after** queue submit since they might still be used in the current frame.
-        // Calling `egui_wgpu::wgpu::Texture::destroy` on a texture that is still in use would invalidate the command buffer(s) it is used in.
-        // However, once we called `egui_wgpu::wgpu::Queue::submit`, it is up for wgpu to determine how long the underlying gpu resource has to live.
-        {
-            let mut renderer = render_state.renderer.write();
-            for id in textures_delta.free.drain() {
-                renderer.free_texture(&id);
-            }
-        }
+        frame.submitted = true;
+        drop(frame);
 
         if let Some(capture_buffer) = capture_buffer {
             if let Some(screen_capture_state) = &mut self.screen_capture_state {
