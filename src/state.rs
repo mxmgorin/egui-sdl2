@@ -12,7 +12,7 @@
 //! 4. Run your egui UI code
 //! 5. Apply [`egui::PlatformOutput`] (cursor, clipboard, etc.)
 //!
-use egui::{Key, Modifiers, MouseWheelUnit, PointerButton, Pos2, Rect};
+use egui::{Key, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, Rect};
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use sdl2::keyboard::Mod;
@@ -191,6 +191,8 @@ impl State {
                         log::warn!("Failed to set copied text to clipboard");
                     }
                 }
+                // Ignored: SDL's PRIMARY selection API would raise the minimum SDL version.
+                egui::OutputCommand::TextSelectionSettled(_) => {}
                 egui::OutputCommand::CopyImage(_color_image) => {
                     log::warn!("CopyImage is not supported")
                 }
@@ -320,6 +322,8 @@ impl State {
                         unit: MouseWheelUnit::Line,
                         delta: egui::vec2(dx + dy, 0.0),
                         phase: egui::TouchPhase::Move,
+                        // SDL2 does not tell a wheel from a trackpad.
+                        source: MouseWheelSource::Unknown,
                         modifiers: self.modifiers,
                     });
                 } else {
@@ -328,6 +332,8 @@ impl State {
                         unit: MouseWheelUnit::Line,
                         delta: egui::vec2(dx, dy),
                         phase: egui::TouchPhase::Move,
+                        // SDL2 does not tell a wheel from a trackpad.
+                        source: MouseWheelSource::Unknown,
                         modifiers: self.modifiers,
                     });
                 }

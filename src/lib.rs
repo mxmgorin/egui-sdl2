@@ -156,7 +156,7 @@ impl EguiRunOutput {
 
     /// Like [`Self::update`], but hands the closure egui's root [`egui::Ui`].
     ///
-    /// Panels ([`egui::CentralPanel`], [`egui::TopBottomPanel`], …) are shown into
+    /// Panels ([`egui::CentralPanel`], [`egui::Panel`], …) are shown into
     /// a `Ui`, so a full-screen layout needs this rather than [`Self::update`].
     #[inline]
     pub fn update_ui(

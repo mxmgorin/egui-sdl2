@@ -1,11 +1,11 @@
-use egui::{Event, ViewportId};
+use egui::ViewportId;
 use egui_wgpu::capture::CaptureState;
 use egui_wgpu::wgpu::{CompositeAlphaMode, TextureFormat};
 use egui_wgpu::wgpu::{
     Surface, SurfaceConfiguration, SurfaceTargetUnsafe, TextureUsages, TextureViewDescriptor,
 };
 use egui_wgpu::{RenderState, RendererOptions, SurfaceErrorAction, WgpuConfiguration, WgpuError};
-use std::{num::NonZeroU32, sync::Arc};
+use std::num::NonZeroU32;
 
 struct SurfaceState {
     surface: Surface<'static>,
@@ -30,8 +30,6 @@ pub struct Painter {
     depth_texture_view: egui::ViewportIdMap<egui_wgpu::wgpu::TextureView>,
     msaa_texture_view: egui::ViewportIdMap<egui_wgpu::wgpu::TextureView>,
     surfaces: egui::ViewportIdMap<SurfaceState>,
-    capture_tx: egui_wgpu::capture::CaptureSender,
-    capture_rx: egui_wgpu::capture::CaptureReceiver,
     options: egui_wgpu::RendererOptions,
 }
 
@@ -56,7 +54,6 @@ impl Painter {
         support_transparent_backbuffer: bool,
         dithering: bool,
     ) -> Self {
-        let (capture_tx, capture_rx) = std::sync::mpsc::channel();
         let instance = configuration.wgpu_setup.new_instance().await;
 
         Self {
@@ -74,8 +71,6 @@ impl Painter {
             surfaces: Default::default(),
             msaa_texture_view: Default::default(),
 
-            capture_tx,
-            capture_rx,
             options: RendererOptions {
                 msaa_samples,
                 depth_stencil_format: depth_format,
@@ -270,12 +265,9 @@ impl Painter {
         }
     }
 
-    /// Returns two things:
+    /// Returns the approximate number of seconds spent on vsync-waiting (if any).
     ///
-    /// The approximate number of seconds spent on vsync-waiting (if any),
-    /// and the captures captured screenshot if it was requested.
-    ///
-    /// If `capture_data` isn't empty, a screenshot will be captured.
+    /// If `capture_data` isn't empty, a screenshot is captured and handed to each callback.
     pub fn paint_and_update_textures(
         &mut self,
         viewport_id: ViewportId,
@@ -284,7 +276,7 @@ impl Painter {
         clipped_primitives: &[egui::ClippedPrimitive],
         // Drained: egui 0.36 asserts on drop that every delta was handled.
         textures_delta: &mut egui::TexturesDelta,
-        capture_data: Vec<egui::UserData>,
+        capture_data: Vec<egui::ScreenshotCallback>,
     ) -> f32 {
         let capture = !capture_data.is_empty();
         let mut vsync_sec = 0.0;
@@ -343,22 +335,28 @@ impl Painter {
             output_frame
         };
 
+        // A capture renders to a texture of its own, so it is served even without a frame.
         let output_frame = match output_frame {
-            egui_wgpu::wgpu::CurrentSurfaceTexture::Success(frame) => frame,
+            egui_wgpu::wgpu::CurrentSurfaceTexture::Success(frame) => Some(frame),
             // egui uses the suboptimal frame as-is and defers reconfiguration to the next frame.
-            egui_wgpu::wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            other => match (*self.configuration.on_surface_status)(&other) {
-                // `Reconfigure` reconfigures the existing surface; `RecreateSurface` asks for a
-                // fresh surface object. This painter only reconfigures in place, so both map to
-                // the same recovery path: reconfigure and skip the current frame.
-                SurfaceErrorAction::Reconfigure | SurfaceErrorAction::RecreateSurface => {
-                    configure_surface(surface_state, render_state, &self.configuration);
+            egui_wgpu::wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
+            other => {
+                match (*self.configuration.on_surface_status)(&other) {
+                    // `Reconfigure` reconfigures the existing surface; `RecreateSurface` asks for a
+                    // fresh surface object. This painter only reconfigures in place, so both map to
+                    // the same recovery path: reconfigure and skip the current frame.
+                    SurfaceErrorAction::Reconfigure | SurfaceErrorAction::RecreateSurface => {
+                        configure_surface(surface_state, render_state, &self.configuration);
+                        // The skipped frame has to be drawn again on the reconfigured surface.
+                        self.context.request_repaint_of(viewport_id);
+                    }
+                    SurfaceErrorAction::SkipFrame => {}
+                }
+                if !capture {
                     return vsync_sec;
                 }
-                SurfaceErrorAction::SkipFrame => {
-                    return vsync_sec;
-                }
-            },
+                None
+            }
         };
 
         let mut capture_buffer = None;
@@ -366,14 +364,35 @@ impl Painter {
             let renderer = render_state.renderer.read();
 
             let target_texture = if capture {
-                let capture_state = self.screen_capture_state.get_or_insert_with(|| {
-                    CaptureState::new(&render_state.device, &output_frame.texture)
-                });
-                capture_state.update(&render_state.device, &output_frame.texture);
+                // Without a frame, the configured surface stands in for it.
+                let (size, format) = match &output_frame {
+                    Some(output_frame) => {
+                        (output_frame.texture.size(), output_frame.texture.format())
+                    }
+                    None => (
+                        egui_wgpu::wgpu::Extent3d {
+                            width: surface_state.width,
+                            height: surface_state.height,
+                            depth_or_array_layers: 1,
+                        },
+                        render_state.target_format,
+                    ),
+                };
+                if size.width == 0 || size.height == 0 {
+                    log::warn!("Cannot capture a screenshot of a zero-sized surface");
+                    return vsync_sec;
+                }
+
+                let capture_state = self
+                    .screen_capture_state
+                    .get_or_insert_with(|| CaptureState::new(&render_state.device, size, format));
+                capture_state.update(&render_state.device, size);
 
                 &capture_state.texture
-            } else {
+            } else if let Some(output_frame) = &output_frame {
                 &output_frame.texture
+            } else {
+                unreachable!("a frameless paint without a capture returned above")
             };
             let target_view = target_texture.create_view(&TextureViewDescriptor::default());
 
@@ -430,7 +449,7 @@ impl Painter {
                 if let Some(capture_state) = &mut self.screen_capture_state {
                     capture_buffer = Some(capture_state.copy_textures(
                         &render_state.device,
-                        &output_frame,
+                        output_frame.as_ref(),
                         &mut encoder,
                     ));
                 }
@@ -461,17 +480,11 @@ impl Painter {
 
         if let Some(capture_buffer) = capture_buffer {
             if let Some(screen_capture_state) = &mut self.screen_capture_state {
-                screen_capture_state.read_screen_rgba(
-                    self.context.clone(),
-                    capture_buffer,
-                    capture_data,
-                    self.capture_tx.clone(),
-                    viewport_id,
-                );
+                screen_capture_state.read_screen_rgba(capture_buffer, capture_data);
             }
         }
 
-        {
+        if let Some(output_frame) = output_frame {
             // wgpu doesn't document where vsync can happen. Maybe here?
             let start = web_time::Instant::now();
             // wgpu 30 presents through the queue rather than the texture.
@@ -480,20 +493,6 @@ impl Painter {
         }
 
         vsync_sec
-    }
-
-    /// Call this at the beginning of each frame to receive the requested screenshots.
-    pub fn handle_screenshots(&self, events: &mut Vec<Event>) {
-        for (viewport_id, user_data, screenshot) in self.capture_rx.try_iter() {
-            let screenshot: Arc<egui::ColorImage> = Arc::new(screenshot);
-            for data in user_data {
-                events.push(Event::Screenshot {
-                    viewport_id,
-                    user_data: data,
-                    image: screenshot.clone(),
-                });
-            }
-        }
     }
 }
 
