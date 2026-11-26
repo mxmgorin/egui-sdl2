@@ -28,7 +28,7 @@ use sdl2::video::{Window, WindowContext};
 /// Integration between [`egui`] and [`sdl2::render::Canvas`] for app based on [`sdl2`].
 ///
 /// `C` is the render target's context: a window's by default, a surface's when
-/// painting offscreen (see [`EguiCanvas::for_target`]).
+/// painting offscreen (see [`EguiCanvas::for_surface`]).
 pub struct EguiCanvas<C = WindowContext> {
     /// The last [`Self::run`]'s output, for a caller that paints it in steps of
     /// its own — timing them apart, or holding a rasterized frame back to reuse.
