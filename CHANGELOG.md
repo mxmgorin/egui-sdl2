@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-26
+
+### Changed
+
+- Updated `egui`, `egui_glow` and `egui-wgpu` from 0.36 to 0.37, and `sdl2`
+  and `sdl2-sys` to 0.38.1.
+- **Breaking:** egui's bundled fonts come with the new `default_fonts`
+  feature, on by default. With `default-features = false`, enable it to see
+  text.
+- **Breaking:** `wgpu::Painter::paint_and_update_textures` takes
+  `egui::ScreenshotCallback`s for screenshots, and
+  `wgpu::Painter::handle_screenshots` is removed.
+
+### Fixed
+
+- The wgpu backend no longer leaks textures or memory on frames it skips, such
+  as while the window is minimized, and no longer panics there in debug builds.
+
 ## [0.12.2] - 2026-11-15
 
 ### Fixed
@@ -224,7 +242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See the [GitHub releases](https://github.com/mxmgorin/egui-sdl2/releases) and
 [tags](https://github.com/mxmgorin/egui-sdl2/tags) for versions 0.3.2 and earlier.
 
-[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/mxmgorin/egui-sdl2/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/mxmgorin/egui-sdl2/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/mxmgorin/egui-sdl2/compare/v0.11.0...v0.12.0
