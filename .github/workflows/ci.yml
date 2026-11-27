@@ -22,8 +22,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # The runner's Microsoft apt source can fail `apt-get update`; nothing here needs it.
       - name: Install SDL2
-        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+        run: |
+          sudo grep -rl packages.microsoft.com /etc/apt/sources.list.d | xargs -r sudo rm -f
+          sudo apt-get update && sudo apt-get install -y libsdl2-dev
 
       - name: Install Rust (stable + Clippy + Rustfmt)
         uses: dtolnay/rust-toolchain@stable
