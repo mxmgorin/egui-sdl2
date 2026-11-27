@@ -261,16 +261,21 @@ impl State {
     /// `set_zoom_factor`/ctrl-wheel zoom reflected within the same frame.
     #[inline]
     fn cached_pixels_per_point(&self) -> f32 {
-        let native_ppp = self
-            .egui_input
+        self.egui_ctx.zoom_factor() * self.cached_native_pixels_per_point()
+    }
+
+    /// The drawable-to-window size ratio stored on the viewport at the last
+    /// resize; `1.0` until one is stored.
+    #[inline]
+    fn cached_native_pixels_per_point(&self) -> f32 {
+        self.egui_input
             .viewports
             .get(&self.viewport_id)
             .and_then(|v| v.native_pixels_per_point)
-            .unwrap_or(1.0);
-        self.egui_ctx.zoom_factor() * native_ppp
+            .unwrap_or(1.0)
     }
 
-    /// Convert window pixel coordinates to egui points via
+    /// Convert window coordinates to egui points via
     /// [`Self::cached_pixels_per_point`], and back through the rotation: egui
     /// laid the frame out for the turned screen, so that is where a press has to
     /// land.
@@ -279,7 +284,9 @@ impl State {
         let ppp = self.cached_pixels_per_point();
         let scale = if ppp > 0.0 { ppp } else { 1.0 };
         let window = egui::vec2(self.drawable_size.0 as f32, self.drawable_size.1 as f32) / scale;
-        self.rotation.from_window(egui::pos2(x, y) / scale, window)
+        // SDL reports window coordinates, and ppp converts drawable pixels.
+        let pixels = egui::pos2(x, y) * self.cached_native_pixels_per_point();
+        self.rotation.from_window(pixels / scale, window)
     }
 
     /// Call this when there is a new event.
@@ -461,17 +468,12 @@ impl State {
             egui::TouchPhase::Move => self.egui_ctx.egui_is_using_pointer(),
         };
 
-        // SDL finger coordinates are normalized to the window (0.0..=1.0), unlike
-        // mouse events which arrive in window coordinates. Scale them to the
-        // window's pixel space so `pos_in_points` (which divides by ppp) yields
-        // the right egui position — otherwise every touch maps to ~(0,0). Use the
-        // *cached* window size so this numerator shares one size basis with the
-        // cached ppp denominator below; mixing a live size here with the cached
-        // ppp would misplace touches during a mid-resize transient.
+        // Fingers come normalized to the window. The cached size shares one basis
+        // with the cached ppp, so a touch mid-resize still lands where it was.
         let (win_w, win_h) = self.window_size;
-        let pixel_x = info.x * win_w as f32;
-        let pixel_y = info.y * win_h as f32;
-        let pos = self.pos_in_points(pixel_x, pixel_y);
+        let window_x = info.x * win_w as f32;
+        let window_y = info.y * win_h as f32;
+        let pos = self.pos_in_points(window_x, window_y);
         self.egui_input.events.push(egui::Event::Touch {
             device_id: egui::TouchDeviceId(info.touch_id as u64),
             id: egui::TouchId::from(info.finger_id as u64),
@@ -706,7 +708,9 @@ pub fn poiner_pos_in_points(
     y: f32,
 ) -> egui::Pos2 {
     let pixels_per_point = pixels_per_point(egui_ctx, window);
-    egui::pos2(x, y) / pixels_per_point
+    // SDL reports window coordinates, and ppp converts drawable pixels.
+    let pixels = egui::pos2(x, y) * native_pixels_per_point(window);
+    pixels / pixels_per_point
 }
 
 #[inline]
